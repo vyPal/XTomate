@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
-use toml::{to_string};
+use toml::to_string;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
