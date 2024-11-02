@@ -1,0 +1,9 @@
+name = "example"
+version = "0.1"
+
+[tasks.task1]
+command = "echo 'Hello'"
+
+[tasks.task2]
+command = "echo 'World'"
+dependencies = ["task1"]

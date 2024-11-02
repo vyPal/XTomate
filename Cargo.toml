@@ -1,0 +1,15 @@
+[package]
+name = "xtomate"
+version = "0.1.0"
+edition = "2021"
+authors = ["vyPal"]
+description = "Your poweful automation ally"
+
+[[bin]]
+name = "xt"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.5.20", features = ["derive"] }
+serde = { version = "1.0.214", features = ["derive"] }
+toml = "0.8.19"
