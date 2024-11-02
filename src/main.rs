@@ -16,7 +16,7 @@ struct Cli {
 enum Commands {
     /// Creates a new workflow
     Create {
-        /// The name of the workflow
+/// The name of the workflow
         name: String,
     },
     /// Deletes a workflow
@@ -39,6 +39,7 @@ enum Commands {
 struct WorkFlow {
     name: String,
     version: String,
+    description: Option<String>,
     tasks: HashMap<String, Task>,
 }
 
@@ -68,7 +69,8 @@ fn main() {
         Some(Commands::Create { name }) => {
             let mut workflow = WorkFlow {
                 name: name.clone(),
-                version: "0.1".to_string(),
+                version: "0.1.0".to_string(),
+                description: None,
                 tasks: HashMap::new(),
             };
             workflow.tasks.insert("task1".to_string(), Task {
