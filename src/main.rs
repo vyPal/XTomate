@@ -1,9 +1,11 @@
 use clap::{Parser, Subcommand};
-use serde::{Deserialize, Serialize};
 use toml::to_string;
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
+
+use workflow::structure::{WorkFlow};
+
+mod workflow;
 
 #[derive(Parser)]
 #[command(name = "XTomate", version, about)]
@@ -35,20 +37,6 @@ enum Commands {
     },
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-struct WorkFlow {
-    name: String,
-    version: String,
-    description: Option<String>,
-    tasks: HashMap<String, Task>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct Task {
-    command: String,
-    dependencies: Option<Vec<String>>,
-}
-
 fn write_workflow(workflow: &WorkFlow, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     let toml_string = to_string(workflow)?;
     let mut file = File::create(file_path)?;
@@ -67,20 +55,9 @@ fn main() {
 
     match &cli.command {
         Some(Commands::Create { name }) => {
-            let mut workflow = WorkFlow {
-                name: name.clone(),
-                version: "0.1.0".to_string(),
-                description: None,
-                tasks: HashMap::new(),
-            };
-            workflow.tasks.insert("task1".to_string(), Task {
-                command: "echo 'Hello'".to_string(),
-                dependencies: None,
-            });
-            workflow.tasks.insert("task2".to_string(), Task {
-                command: "echo 'World'".to_string(),
-                dependencies: Some(vec!["task1".to_string()]),
-            });
+            let mut workflow = WorkFlow::new(name.to_string(), "0.1.0".to_string(), None);
+            workflow.add_task("task1".to_string(), "echo Hello".to_string(), None);
+            workflow.add_task("task2".to_string(), "echo World".to_string(), Some(vec!["task1".to_string()]));
             write_workflow(&workflow, &format!("{}.toml", name)).unwrap();
             println!("Creating workflow: {}", name);
         }
@@ -94,10 +71,10 @@ fn main() {
         Some(Commands::Run { name }) => {
             let workflow = read_workflow(&format!("{}.toml", name)).unwrap();
             println!("Running workflow: {}", name);
-            for (task_name, task) in workflow.tasks.iter() {
+            for (task_name, task) in workflow.get_tasks().iter() {
                 println!("Running task: {}", task_name);
                 println!("Command: {}", task.command);
-                match &task.dependencies {
+                match &task.get_dependencies() {
                     Some(dependencies) => {
                         for dependency in dependencies.iter() {
                             println!("Dependency: {}", dependency);
