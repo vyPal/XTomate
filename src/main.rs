@@ -71,6 +71,7 @@ fn main() {
         }
         Some(Commands::Run { name }) => {
             let workflow = read_workflow(&format!("{}.toml", name)).unwrap();
+            println!("Workflow: {:?}", workflow);
             println!("Running workflow: {}", name);
             let first_task: String = workflow.get_tasks().keys().next().unwrap().to_string();
             println!("First task: {}", first_task);
