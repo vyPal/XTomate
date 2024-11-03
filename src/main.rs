@@ -3,7 +3,7 @@ use toml::to_string;
 use std::fs::File;
 use std::io::Write;
 
-use workflow::structure::{WorkFlow};
+use workflow::structure::WorkFlow;
 
 mod workflow;
 
