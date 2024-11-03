@@ -4,6 +4,7 @@ use std::fs::File;
 use std::io::Write;
 
 use workflow::structure::WorkFlow;
+use workflow::runner::Runner;
 
 mod workflow;
 
@@ -71,18 +72,10 @@ fn main() {
         Some(Commands::Run { name }) => {
             let workflow = read_workflow(&format!("{}.toml", name)).unwrap();
             println!("Running workflow: {}", name);
-            for (task_name, task) in workflow.get_tasks().iter() {
-                println!("Running task: {}", task_name);
-                println!("Command: {}", task.command);
-                match &task.get_dependencies() {
-                    Some(dependencies) => {
-                        for dependency in dependencies.iter() {
-                            println!("Dependency: {}", dependency);
-                        }
-                    }
-                    None => {}
-                }
-            }
+            let first_task: String = workflow.get_tasks().keys().next().unwrap().to_string();
+            println!("First task: {}", first_task);
+            let runner = Runner::new(workflow);
+            runner.run(&first_task);
         }
         None => {
             println!("No command provided");
