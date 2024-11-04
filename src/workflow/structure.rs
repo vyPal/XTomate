@@ -12,7 +12,7 @@ pub struct WorkFlow {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Task {
     pub command: String,
-    dependencies: Option<Vec<String>>,
+    dependencies: Option<Vec<(String, String)>>,
 }
 
 impl WorkFlow {
@@ -25,7 +25,7 @@ impl WorkFlow {
         }
     }
 
-    pub fn add_task(&mut self, name: String, command: String, dependencies: Option<Vec<String>>) {
+    pub fn add_task(&mut self, name: String, command: String, dependencies: Option<Vec<(String, String)>>) {
         self.tasks.insert(
             name,
             Task {
@@ -49,14 +49,14 @@ impl WorkFlow {
 }
 
 impl Task {
-    pub fn new(command: String, dependencies: Option<Vec<String>>) -> Self {
+    pub fn new(command: String, dependencies: Option<Vec<(String, String)>>) -> Self {
         Task {
             command,
             dependencies,
         }
     }
 
-    pub fn add_dependency(&mut self, dependency: String) {
+    pub fn add_dependency(&mut self, dependency: (String, String)) {
         if let Some(ref mut dependencies) = self.dependencies {
             dependencies.push(dependency);
         } else {
@@ -64,13 +64,13 @@ impl Task {
         }
     }
 
-    pub fn remove_dependency(&mut self, dependency: &str) {
+    pub fn remove_dependency(&mut self, dependency: &(String, String)) {
         if let Some(ref mut dependencies) = self.dependencies {
             dependencies.retain(|d| d != dependency);
         }
     }
 
-    pub fn get_dependencies(&self) -> Option<&Vec<String>> {
+    pub fn get_dependencies(&self) -> Option<&Vec<(String, String)>> {
         self.dependencies.as_ref()
     }
 }

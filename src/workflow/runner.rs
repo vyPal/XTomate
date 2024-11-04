@@ -13,9 +13,13 @@ impl Runner {
         let task = self.workflow.get_task(task_name).unwrap();
         match &task.get_dependencies() {
             Some(dependencies) => {
-                for dependency in dependencies.iter() {
-                    println!("Running dependency: {}", dependency);
-                    self.run(dependency);
+                for (dependency, status) in dependencies.iter() {
+                    println!("Running dependency: {} with status: {}", dependency, status);
+                    if self.check_dependency_status(dependency, status) {
+                        self.run(dependency);
+                    } else {
+                        println!("Skipping dependency: {} due to status: {}", dependency, status);
+                    }
                 }
             }
             None => {}
@@ -29,5 +33,11 @@ impl Runner {
             .expect("failed to execute process");
         println!("status: {}", output.status);
         println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+    }
+
+    fn check_dependency_status(&self, dependency: &str, status: &str) -> bool {
+        // Add logic to check the status of the dependency
+        // For now, we assume all dependencies are successful
+        true
     }
 }

@@ -14,7 +14,5 @@ command = "echo Hello" # Command to execute
 
 [task2] # Another way to define a task
 command = "echo World"
-dependencies = ["task1"] # Dependencies
+dependencies = ["task1" = "success"] # Dependencies
 ```
-
-
