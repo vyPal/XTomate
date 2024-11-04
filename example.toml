@@ -6,4 +6,4 @@ command = "echo 'Hello'"
 
 [tasks.task2]
 command = "echo 'World'"
-dependencies = ["task1"]
+dependencies = ["task1" = "success"]
