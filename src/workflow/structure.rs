@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use toml::Table;
 use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -12,7 +13,14 @@ pub struct WorkFlow {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Task {
     pub command: String,
-    dependencies: Option<Vec<(String, String)>>,
+    dependencies: Option<Vec<Dependency>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[serde(untagged)]
+pub enum Dependency {
+    Simple(String),
+    Status(Table),
 }
 
 impl WorkFlow {
@@ -25,7 +33,7 @@ impl WorkFlow {
         }
     }
 
-    pub fn add_task(&mut self, name: String, command: String, dependencies: Option<Vec<(String, String)>>) {
+    pub fn add_task(&mut self, name: String, command: String, dependencies: Option<Vec<Dependency>>) {
         self.tasks.insert(
             name,
             Task {
@@ -49,14 +57,14 @@ impl WorkFlow {
 }
 
 impl Task {
-    pub fn new(command: String, dependencies: Option<Vec<(String, String)>>) -> Self {
+    pub fn new(command: String, dependencies: Option<Vec<Dependency>>) -> Self {
         Task {
             command,
             dependencies,
         }
     }
 
-    pub fn add_dependency(&mut self, dependency: (String, String)) {
+    pub fn add_dependency(&mut self, dependency: Dependency) {
         if let Some(ref mut dependencies) = self.dependencies {
             dependencies.push(dependency);
         } else {
@@ -64,13 +72,13 @@ impl Task {
         }
     }
 
-    pub fn remove_dependency(&mut self, dependency: &(String, String)) {
+    pub fn remove_dependency(&mut self, dependency: &Dependency) {
         if let Some(ref mut dependencies) = self.dependencies {
             dependencies.retain(|d| d != dependency);
         }
     }
 
-    pub fn get_dependencies(&self) -> Option<&Vec<(String, String)>> {
+    pub fn get_dependencies(&self) -> Option<&Vec<Dependency>> {
         self.dependencies.as_ref()
     }
 }

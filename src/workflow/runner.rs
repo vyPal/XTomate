@@ -1,24 +1,50 @@
-use super::structure::WorkFlow;
+use std::collections::HashMap;
+
+use super::structure::{WorkFlow,Dependency};
 
 pub struct Runner {
     workflow: WorkFlow,
+    tasks: HashMap<String, RunnerTask>
+}
+
+struct RunnerTask {
+    task: String,
+    running: bool,
+    success: bool,
 }
 
 impl Runner {
     pub fn new(workflow: WorkFlow) -> Self {
-        Runner { workflow }
+        Runner { workflow, tasks: HashMap::new() }
+    }
+
+    pub fn load(&self) {
+        let tasks = self.workflow.get_tasks();
     }
 
     pub fn run(&self, task_name: &str) {
         let task = self.workflow.get_task(task_name).unwrap();
         match &task.get_dependencies() {
             Some(dependencies) => {
-                for (dependency, status) in dependencies.iter() {
-                    println!("Running dependency: {} with status: {}", dependency, status);
-                    if self.check_dependency_status(dependency, status) {
-                        self.run(dependency);
-                    } else {
-                        println!("Skipping dependency: {} due to status: {}", dependency, status);
+                for dep in dependencies.iter() {
+                    match &dep {
+                        Dependency::Simple(dependency) => {
+                            println!("Running dependency: {}", dependency);
+                            if self.check_dependency_status(dependency, "success") {
+                                self.run(dependency);
+                            } else {
+                                println!("Skipping dependency: {} due to status: {}", dependency, "success");
+                            }
+                        }
+                        Dependency::Status(dep) => {
+                            let dependency = dep.keys().next().unwrap();
+                            println!("Running dependency: {} with status: {}", dependency, dep.get(dependency).unwrap().as_str().unwrap());
+                            if self.check_dependency_status(dependency, dep.get(dependency).unwrap().as_str().unwrap()) {
+                                self.run(dependency);
+                            } else {
+                                println!("Skipping dependency: {} due to status: {}", dependency, dep.get(dependency).unwrap().as_str().unwrap());
+                            }
+                        }
                     }
                 }
             }

@@ -3,7 +3,7 @@ use toml::to_string;
 use std::fs::File;
 use std::io::Write;
 
-use workflow::structure::WorkFlow;
+use workflow::structure::{WorkFlow,Dependency};
 use workflow::runner::Runner;
 
 mod workflow;
@@ -58,7 +58,7 @@ fn main() {
         Some(Commands::Create { name }) => {
             let mut workflow = WorkFlow::new(name.to_string(), "0.1.0".to_string(), None);
             workflow.add_task("task1".to_string(), "echo Hello".to_string(), None);
-            workflow.add_task("task2".to_string(), "echo World".to_string(), Some(vec!["task1".to_string()]));
+            workflow.add_task("task2".to_string(), "echo World".to_string(), Some(vec![Dependency::Simple("task1".to_string())]));
             write_workflow(&workflow, &format!("{}.toml", name)).unwrap();
             println!("Creating workflow: {}", name);
         }
