@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use toml::Table;
 use std::collections::HashMap;
+use toml::Table;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WorkFlow {
@@ -33,7 +33,12 @@ impl WorkFlow {
         }
     }
 
-    pub fn add_task(&mut self, name: String, command: String, dependencies: Option<Vec<Dependency>>) {
+    pub fn add_task(
+        &mut self,
+        name: String,
+        command: String,
+        dependencies: Option<Vec<Dependency>>,
+    ) {
         self.tasks.insert(
             name,
             Task {
@@ -41,10 +46,6 @@ impl WorkFlow {
                 dependencies,
             },
         );
-    }
-
-    pub fn remove_task(&mut self, name: &str) {
-        self.tasks.remove(name);
     }
 
     pub fn get_task(&self, name: &str) -> Option<&Task> {
@@ -57,27 +58,6 @@ impl WorkFlow {
 }
 
 impl Task {
-    pub fn new(command: String, dependencies: Option<Vec<Dependency>>) -> Self {
-        Task {
-            command,
-            dependencies,
-        }
-    }
-
-    pub fn add_dependency(&mut self, dependency: Dependency) {
-        if let Some(ref mut dependencies) = self.dependencies {
-            dependencies.push(dependency);
-        } else {
-            self.dependencies = Some(vec![dependency]);
-        }
-    }
-
-    pub fn remove_dependency(&mut self, dependency: &Dependency) {
-        if let Some(ref mut dependencies) = self.dependencies {
-            dependencies.retain(|d| d != dependency);
-        }
-    }
-
     pub fn get_dependencies(&self) -> Option<&Vec<Dependency>> {
         self.dependencies.as_ref()
     }

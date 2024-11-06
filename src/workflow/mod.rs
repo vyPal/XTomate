@@ -1,2 +1,2 @@
-pub mod structure;
 pub mod runner;
+pub mod structure;

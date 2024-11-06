@@ -1,10 +1,10 @@
 use clap::{Parser, Subcommand};
-use toml::to_string;
 use std::fs::File;
 use std::io::Write;
+use toml::to_string;
 
-use workflow::structure::{WorkFlow,Dependency};
 use workflow::runner::Runner;
+use workflow::structure::{Dependency, WorkFlow};
 
 mod workflow;
 
@@ -19,7 +19,7 @@ struct Cli {
 enum Commands {
     /// Creates a new workflow
     Create {
-/// The name of the workflow
+        /// The name of the workflow
         name: String,
     },
     /// Deletes a workflow
@@ -58,7 +58,11 @@ fn main() {
         Some(Commands::Create { name }) => {
             let mut workflow = WorkFlow::new(name.to_string(), "0.1.0".to_string(), None);
             workflow.add_task("task1".to_string(), "echo Hello".to_string(), None);
-            workflow.add_task("task2".to_string(), "echo World".to_string(), Some(vec![Dependency::Simple("task1".to_string())]));
+            workflow.add_task(
+                "task2".to_string(),
+                "echo World".to_string(),
+                Some(vec![Dependency::Simple("task1".to_string())]),
+            );
             write_workflow(&workflow, &format!("{}.toml", name)).unwrap();
             println!("Creating workflow: {}", name);
         }
@@ -71,12 +75,9 @@ fn main() {
         }
         Some(Commands::Run { name }) => {
             let workflow = read_workflow(&format!("{}.toml", name)).unwrap();
-            println!("Workflow: {:?}", workflow);
-            println!("Running workflow: {}", name);
-            let first_task: String = workflow.get_tasks().keys().next().unwrap().to_string();
-            println!("First task: {}", first_task);
-            let runner = Runner::new(workflow);
-            runner.run(&first_task);
+            let mut runner = Runner::new(workflow);
+            runner.load();
+            runner.run_all();
         }
         None => {
             println!("No command provided");
