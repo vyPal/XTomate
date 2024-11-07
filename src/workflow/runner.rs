@@ -142,9 +142,17 @@ impl Runner {
     fn execute_task(&self, task_name: &str) {
         let task = self.workflow.get_task(task_name).unwrap();
 
+        let mut env: Vec<(String, String)> = vec![];
+        if let Some(task_env) = task.get_env() {
+            for (key, value) in task_env.iter() {
+                env.push((key.clone(), value.as_str().unwrap().to_string()));
+            }
+        }
+
         let output = std::process::Command::new("sh")
             .arg("-c")
             .arg(&task.command)
+            .envs(env)
             .stdout(std::process::Stdio::inherit())
             .output();
 

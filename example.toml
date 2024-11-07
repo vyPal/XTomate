@@ -16,9 +16,10 @@ dependencies = [{"prepdir" = "success"}]
 
 [tasks.writefile]
 command = '''
-echo "hello world" > testdir/hello.txt
+echo "$WORLD $HELLO" > testdir/hello.txt
 '''
 dependencies = [{"prepdir" = "success"}]
+env = {HELLO = "world", WORLD = "hello"}
 
 [tasks.runprogram]
 command = "python testdir/hello.py && cat testdir/hello.txt"

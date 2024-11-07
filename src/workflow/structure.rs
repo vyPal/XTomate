@@ -13,6 +13,9 @@ pub struct WorkFlow {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Task {
     pub command: String,
+    pub retry: Option<usize>,
+    pub retry_delay: Option<usize>,
+    env: Option<Table>,
     dependencies: Option<Vec<Dependency>>,
 }
 
@@ -43,6 +46,9 @@ impl WorkFlow {
             name,
             Task {
                 command,
+                retry: None,
+                retry_delay: None,
+                env: None,
                 dependencies,
             },
         );
@@ -60,5 +66,9 @@ impl WorkFlow {
 impl Task {
     pub fn get_dependencies(&self) -> Option<&Vec<Dependency>> {
         self.dependencies.as_ref()
+    }
+
+    pub fn get_env(&self) -> Option<&Table> {
+        self.env.as_ref()
     }
 }
