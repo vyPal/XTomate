@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::{cell::RefCell, collections::{HashMap, HashSet, VecDeque}};
 
 use super::structure::{Dependency, WorkFlow};
 
@@ -9,7 +9,7 @@ pub struct Runner {
 }
 
 struct RunnerTask {
-    success: Option<bool>,
+    success: RefCell<Option<bool>>,
 }
 
 impl Runner {
@@ -28,7 +28,7 @@ impl Runner {
         }
 
         for (name, _) in tasks.iter() {
-            let runnertask = RunnerTask { success: None };
+            let runnertask = RunnerTask { success: RefCell::new(None) };
 
             self.tasks.insert(name.clone(), runnertask);
         }
@@ -109,37 +109,49 @@ impl Runner {
     }
 
     pub fn run(&self, task_name: &str) {
-        let task = self.workflow.get_task(task_name).unwrap();
-
-        match &task.get_dependencies() {
-            Some(dependencies) => {
+        if let Some(task) = self.workflow.get_task(task_name) {
+            if let Some(dependencies) = task.get_dependencies() {
                 for dep in dependencies.iter() {
                     match dep {
                         Dependency::Simple(dependency) => {
-                            if self.check_dependency_status(dependency, "success") {
+                            if self.needs_run(dependency) {
                                 self.run(dependency);
+                            }
+                            if !self.check_dependency_status(dependency, "success") {
+                                panic!("Dependency failed: {}, terminating workflow!", dependency);
                             }
                         }
                         Dependency::Status(dep) => {
                             let dependency = dep.keys().next().unwrap();
                             let required_status = dep.get(dependency).unwrap().as_str().unwrap();
-
-                            if self.check_dependency_status(dependency, required_status) {
+                            if self.needs_run(dependency) {
                                 self.run(dependency);
+                            }
+                            if !self.check_dependency_status(dependency, required_status) {
+                                panic!("Dependency did not satisfy state {}: {}, terminating workflow!", required_status, dependency);
                             }
                         }
                     }
                 }
             }
-            None => {}
-        }
 
-        std::process::Command::new("sh")
+            self.execute_task(task_name);
+        }
+    }
+
+    fn execute_task(&self, task_name: &str) {
+        let task = self.workflow.get_task(task_name).unwrap();
+
+        let output = std::process::Command::new("sh")
             .arg("-c")
             .arg(&task.command)
             .stdout(std::process::Stdio::inherit())
-            .output()
-            .expect("Failed to execute process");
+            .output();
+
+        let success = output.map(|o| o.status.success()).unwrap_or(false);
+        if let Some(runner_task) = self.tasks.get(task_name) {
+            *runner_task.success.borrow_mut() = Some(success);
+        }
     }
 
     pub fn run_all(&self) {
@@ -151,11 +163,23 @@ impl Runner {
     }
 
     fn check_dependency_status(&self, task: &str, status: &str) -> bool {
-        let task = self.tasks.get(task).unwrap();
-        match status {
-            "success" => task.success.unwrap_or(false),
-            "failure" => task.success.unwrap_or(true),
-            _ => false,
+        if let Some(runner_task) = self.tasks.get(task) {
+            match status {
+                "success" => runner_task.success.borrow().unwrap_or(false),
+                "failure" | "fail" => !runner_task.success.borrow().unwrap_or(true),
+                "any" => true,
+                _ => panic!("Unknown status: {}", status),
+            }
+        } else {
+            false
+        }
+    }
+
+    fn needs_run(&self, task: &str) -> bool {
+        if let Some(runner_task) = self.tasks.get(task) {
+            runner_task.success.borrow().is_none()
+        } else {
+            false
         }
     }
 }

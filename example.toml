@@ -1,9 +1,25 @@
 name = "example"
-version = "0.1"
+version = "0.1.0"
 
-[tasks.task1]
-command = "echo 'Hello'"
+[tasks.prepdir]
+command = """
+mkdir testdir
+cd testdir
+touch hello.py
+"""
 
-[tasks.task2]
-command = "echo 'World'"
-dependencies = [{"task1" = "success"}]
+[tasks.createprogram]
+command = '''
+echo "print('hello world')" > testdir/hello.py
+'''
+dependencies = [{"prepdir" = "success"}]
+
+[tasks.writefile]
+command = '''
+echo "hello world" > testdir/hello.txt
+'''
+dependencies = [{"prepdir" = "success"}]
+
+[tasks.runprogram]
+command = "python testdir/hello.py && cat testdir/hello.txt"
+dependencies = [{"createprogram" = "success"}, {"writefile" = "success"}]
