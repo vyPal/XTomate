@@ -11,7 +11,7 @@ touch hello.py
 [tasks.thisfails]
 command = "exit 1"
 retry = 3
-retry_delay = 5
+retry_delay = 1
 
 [tasks.createprogram]
 command = '''

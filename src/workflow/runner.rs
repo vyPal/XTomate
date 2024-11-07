@@ -1,4 +1,7 @@
-use std::{cell::RefCell, collections::{HashMap, HashSet, VecDeque}};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    sync::{Arc, Mutex},
+};
 
 use super::structure::{Dependency, WorkFlow};
 
@@ -9,7 +12,7 @@ pub struct Runner {
 }
 
 struct RunnerTask {
-    success: RefCell<Option<bool>>,
+    success: Arc<Mutex<Option<bool>>>,
 }
 
 impl Runner {
@@ -28,7 +31,9 @@ impl Runner {
         }
 
         for (name, _) in tasks.iter() {
-            let runnertask = RunnerTask { success: RefCell::new(None) };
+            let runnertask = RunnerTask {
+                success: Arc::new(Mutex::new(None)),
+            };
 
             self.tasks.insert(name.clone(), runnertask);
         }
@@ -108,14 +113,14 @@ impl Runner {
         Ok(())
     }
 
-    pub fn run(&self, task_name: &str) {
+    pub async fn run(&self, task_name: &str) {
         if let Some(task) = self.workflow.get_task(task_name) {
             if let Some(dependencies) = task.get_dependencies() {
                 for dep in dependencies.iter() {
                     match dep {
                         Dependency::Simple(dependency) => {
                             if self.needs_run(dependency) {
-                                self.run(dependency);
+                                Box::pin(self.run(dependency)).await;
                             }
                             if !self.check_dependency_status(dependency, "success") {
                                 panic!("Dependency failed: {}, terminating workflow!", dependency);
@@ -125,7 +130,7 @@ impl Runner {
                             let dependency = dep.keys().next().unwrap();
                             let required_status = dep.get(dependency).unwrap().as_str().unwrap();
                             if self.needs_run(dependency) {
-                                self.run(dependency);
+                                Box::pin(self.run(dependency)).await;
                             }
                             if !self.check_dependency_status(dependency, required_status) {
                                 panic!("Dependency did not satisfy state {}: {}, terminating workflow!", required_status, dependency);
@@ -135,11 +140,11 @@ impl Runner {
                 }
             }
 
-            self.execute_task(task_name);
+            self.execute_task(task_name).await;
         }
     }
 
-    fn execute_task(&self, task_name: &str) {
+    async fn execute_task(&self, task_name: &str) {
         let task = self.workflow.get_task(task_name).unwrap();
 
         let mut env: Vec<(String, String)> = vec![];
@@ -149,44 +154,91 @@ impl Runner {
             }
         }
 
-        let output = std::process::Command::new("sh")
+        let output = tokio::process::Command::new("sh")
             .arg("-c")
             .arg(&task.command)
             .envs(env.clone())
-            .stdout(std::process::Stdio::inherit())
-            .output();
+            .output()
+            .await;
 
-        let mut success = output.map(|o| o.status.success()).unwrap_or(false);
+        let mut success = output
+            .map(|o| {
+                if !o.stdout.is_empty() {
+                    println!(
+                        "Task `{}` stdout:\n{}",
+                        task_name,
+                        String::from_utf8_lossy(&o.stdout)
+                    );
+                }
+                if !o.stderr.is_empty() {
+                    eprintln!(
+                        "Task `{}` stderr:\n{}",
+                        task_name,
+                        String::from_utf8_lossy(&o.stderr)
+                    );
+                }
+                o.status.success()
+            })
+            .unwrap_or(false);
 
         if let Some(retry) = task.retry {
             let mut retries = 0;
             while !success && retries < retry {
-                println!("Retrying task: {}", task_name);
                 retries += 1;
                 if let Some(delay) = task.retry_delay {
-                    std::thread::sleep(std::time::Duration::from_secs(delay as u64));
+                    tokio::time::sleep(std::time::Duration::from_secs(delay as u64)).await;
                 }
 
-                let output = std::process::Command::new("sh")
+                let output = tokio::process::Command::new("sh")
                     .arg("-c")
                     .arg(&task.command)
                     .envs(env.clone())
-                    .stdout(std::process::Stdio::inherit())
-                    .output();
+                    .output()
+                    .await;
 
-                success = output.map(|o| o.status.success()).unwrap_or(false);
+                success = output
+                    .map(|o| {
+                        if !o.stdout.is_empty() {
+                            println!(
+                                "Task `{}` retry #{} stdout:\n{}",
+                                task_name,
+                                retries,
+                                String::from_utf8_lossy(&o.stdout)
+                            );
+                        }
+                        if !o.stderr.is_empty() {
+                            eprintln!(
+                                "Task `{}` retry #{} stderr:\n{}",
+                                task_name,
+                                retries,
+                                String::from_utf8_lossy(&o.stderr)
+                            );
+                        }
+                        o.status.success()
+                    })
+                    .unwrap_or(false);
             }
         }
 
         if let Some(runner_task) = self.tasks.get(task_name) {
-            *runner_task.success.borrow_mut() = Some(success);
+            *runner_task.success.lock().expect("Failed to lock mutex") = Some(success);
         }
     }
 
-    pub fn run_all(&self) {
+    pub async fn run_all(self: Arc<Self>) {
         for stage in self.order.iter() {
+            let mut handles = vec![];
             for task in stage {
-                self.run(task);
+                let self_clone = Arc::clone(&self);
+                let task_name = task.clone();
+                let handle = tokio::task::spawn(async move {
+                    self_clone.run(&task_name).await;
+                });
+                handles.push(handle);
+            }
+
+            for handle in handles {
+                handle.await.unwrap();
             }
         }
     }
@@ -194,8 +246,8 @@ impl Runner {
     fn check_dependency_status(&self, task: &str, status: &str) -> bool {
         if let Some(runner_task) = self.tasks.get(task) {
             match status {
-                "success" => runner_task.success.borrow().unwrap_or(false),
-                "failure" | "fail" => !runner_task.success.borrow().unwrap_or(true),
+                "success" => runner_task.success.lock().expect("f").unwrap_or(false),
+                "failure" | "fail" => !runner_task.success.lock().expect("f").unwrap_or(true),
                 "any" => true,
                 _ => panic!("Unknown status: {}", status),
             }
@@ -206,7 +258,7 @@ impl Runner {
 
     fn needs_run(&self, task: &str) -> bool {
         if let Some(runner_task) = self.tasks.get(task) {
-            runner_task.success.borrow().is_none()
+            runner_task.success.lock().expect("f").is_none()
         } else {
             false
         }

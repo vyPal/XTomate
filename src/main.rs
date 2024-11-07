@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use std::fs::File;
 use std::io::Write;
+use std::sync::Arc;
 use toml::to_string;
 
 use workflow::runner::Runner;
@@ -51,7 +52,8 @@ fn read_workflow(file_path: &str) -> Result<WorkFlow, Box<dyn std::error::Error>
     Ok(workflow)
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
@@ -77,7 +79,7 @@ fn main() {
             let workflow = read_workflow(&format!("{}.toml", name)).unwrap();
             let mut runner = Runner::new(workflow);
             runner.load();
-            runner.run_all();
+            Arc::new(runner).run_all().await;
         }
         None => {
             println!("No command provided");
