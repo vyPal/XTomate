@@ -8,6 +8,11 @@ cd testdir
 touch hello.py
 """
 
+[tasks.thisfails]
+command = "exit 1"
+retry = 3
+retry_delay = 5
+
 [tasks.createprogram]
 command = '''
 echo "print('hello world')" > testdir/hello.py

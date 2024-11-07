@@ -152,11 +152,32 @@ impl Runner {
         let output = std::process::Command::new("sh")
             .arg("-c")
             .arg(&task.command)
-            .envs(env)
+            .envs(env.clone())
             .stdout(std::process::Stdio::inherit())
             .output();
 
-        let success = output.map(|o| o.status.success()).unwrap_or(false);
+        let mut success = output.map(|o| o.status.success()).unwrap_or(false);
+
+        if let Some(retry) = task.retry {
+            let mut retries = 0;
+            while !success && retries < retry {
+                println!("Retrying task: {}", task_name);
+                retries += 1;
+                if let Some(delay) = task.retry_delay {
+                    std::thread::sleep(std::time::Duration::from_secs(delay as u64));
+                }
+
+                let output = std::process::Command::new("sh")
+                    .arg("-c")
+                    .arg(&task.command)
+                    .envs(env.clone())
+                    .stdout(std::process::Stdio::inherit())
+                    .output();
+
+                success = output.map(|o| o.status.success()).unwrap_or(false);
+            }
+        }
+
         if let Some(runner_task) = self.tasks.get(task_name) {
             *runner_task.success.borrow_mut() = Some(success);
         }
