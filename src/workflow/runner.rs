@@ -65,15 +65,6 @@ impl Runner {
                     plugin: lib,
                 });
             }
-            /*
-            let wasm_file = Wasm::file(self.plugin_path.join(plugin.name.to_owned() + ".wasm"));
-            let manifest = Manifest::new([wasm_file]);
-            let builder = PluginBuilder::new(manifest).with_wasi(true);
-            self.plugins.push(RunnerPlugin {
-                name: plugin.name.clone(),
-                plugin: Arc::new(Mutex::new(builder.build().unwrap())),
-            });
-            */
         }
 
         let tasks = self.workflow.get_tasks();
@@ -309,11 +300,6 @@ impl Runner {
                 }
             }
 
-            /*
-            let mut lock = plugin.plugin.lock().expect("f");
-            let output = lock.call::<&str, i64>("execute", config.to_string().as_str());
-            println!("Output: {:?}", output);
-            */
             unsafe {
                 let execute: Symbol<unsafe extern "C" fn(*const c_char) -> i32> =
                     plugin.plugin.get(b"execute").unwrap();
