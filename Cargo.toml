@@ -4,6 +4,12 @@ version = "0.1.0"
 edition = "2021"
 authors = ["vyPal"]
 description = "Your poweful automation ally"
+license = "GPL-3.0-only"
+readme = "README.md"
+homepage = "https://github.com/vyPal/XTomate"
+repository = "https://github.com/vyPal/XTomate"
+keywords = ["cli", "automation", "task-runner", "workflow"]
+categories = ["command-line-utilities"]
 
 [[bin]]
 name = "xt"
