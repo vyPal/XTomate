@@ -6,6 +6,7 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     path::PathBuf,
     sync::{Arc, Mutex},
+    env::consts::{DLL_PREFIX, DLL_SUFFIX},
 };
 
 use super::structure::{Dependency, WorkFlow};
@@ -42,12 +43,7 @@ impl Runner {
         let plugins = self.workflow.get_plugins();
         for plugin in plugins {
             unsafe {
-                let lib_filename = match std::env::consts::OS {
-                    "linux" => format!("lib{}.so", plugin.name),
-                    "macos" => format!("lib{}.dylib", plugin.name),
-                    "windows" => format!("{}.dll", plugin.name),
-                    _ => panic!("Unsupported OS"),
-                };
+                let lib_filename = format!("{}{}.{}", DLL_PREFIX, plugin.name, DLL_SUFFIX);
 
                 let lib_path = self.plugin_path.join(lib_filename);
                 let lib = Library::new(lib_path).expect("Failed to load plugin");
