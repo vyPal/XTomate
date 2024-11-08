@@ -7,14 +7,19 @@ pub struct WorkFlow {
     pub name: String,
     pub version: String,
     pub description: Option<String>,
+    on_finish: Option<Vec<Dependency>>,
     tasks: HashMap<String, Task>,
+    plugins: Vec<Plugin>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Task {
-    pub command: String,
+    pub command: Option<String>,
     pub retry: Option<usize>,
     pub retry_delay: Option<usize>,
+    pub run: Option<bool>,
+    pub plugin: Option<String>,
+    config: Option<Table>,
     env: Option<Table>,
     dependencies: Option<Vec<Dependency>>,
 }
@@ -26,13 +31,21 @@ pub enum Dependency {
     Status(Table),
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Plugin {
+    pub name: String,
+    config: Option<Table>,
+}
+
 impl WorkFlow {
     pub fn new(name: String, version: String, description: Option<String>) -> Self {
         WorkFlow {
             name,
             version,
             description,
+            on_finish: None,
             tasks: HashMap::new(),
+            plugins: vec![],
         }
     }
 
@@ -45,7 +58,10 @@ impl WorkFlow {
         self.tasks.insert(
             name,
             Task {
-                command,
+                command: Some(command),
+                plugin: None,
+                config: None,
+                run: None,
                 retry: None,
                 retry_delay: None,
                 env: None,
@@ -61,6 +77,14 @@ impl WorkFlow {
     pub fn get_tasks(&self) -> &HashMap<String, Task> {
         &self.tasks
     }
+
+    pub fn get_plugins(&self) -> &Vec<Plugin> {
+        self.plugins.as_ref()
+    }
+
+    pub fn get_on_finish(&self) -> Option<&Vec<Dependency>> {
+        self.on_finish.as_ref()
+    }
 }
 
 impl Task {
@@ -68,7 +92,17 @@ impl Task {
         self.dependencies.as_ref()
     }
 
+    pub fn get_config(&self) -> Option<&Table> {
+        self.config.as_ref()
+    }
+
     pub fn get_env(&self) -> Option<&Table> {
         self.env.as_ref()
+    }
+}
+
+impl Plugin {
+    pub fn get_config(&self) -> Option<&Table> {
+        self.config.as_ref()
     }
 }

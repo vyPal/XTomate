@@ -1,17 +1,23 @@
 name = "example"
 version = "0.1.0"
 
+on_finish = ["notify_send"]
+
+[[plugins]]
+name = "notify_send"
+config = { app_name = "XTomate" }
+
+[tasks.notify_send]
+run = false
+plugin = "notify_send"
+config = { message = "Workflow finished" }
+
 [tasks.prepdir]
 command = """
 mkdir testdir
 cd testdir
 touch hello.py
 """
-
-[tasks.thisfails]
-command = "exit 1"
-retry = 3
-retry_delay = 1
 
 [tasks.createprogram]
 command = '''

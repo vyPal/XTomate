@@ -1,7 +1,12 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
+    path::PathBuf,
     sync::{Arc, Mutex},
 };
+use serde_json;
+use std::ffi::{CString};
+use std::os::raw::c_char;
+use libloading::{Library, Symbol};
 
 use super::structure::{Dependency, WorkFlow};
 
@@ -9,6 +14,13 @@ pub struct Runner {
     workflow: WorkFlow,
     tasks: HashMap<String, RunnerTask>,
     order: Vec<Vec<String>>,
+    plugin_path: PathBuf,
+    plugins: Vec<RunnerPlugin>,
+}
+
+struct RunnerPlugin {
+    name: String,
+    plugin: Library,
 }
 
 struct RunnerTask {
@@ -16,15 +28,48 @@ struct RunnerTask {
 }
 
 impl Runner {
-    pub fn new(workflow: WorkFlow) -> Self {
+    pub fn new(workflow: WorkFlow, plugin_path: PathBuf) -> Self {
         Runner {
             workflow,
             tasks: HashMap::new(),
             order: vec![],
+            plugin_path,
+            plugins: vec![],
         }
     }
 
     pub fn load(&mut self) {
+        let plugins = self.workflow.get_plugins();
+        for plugin in plugins {
+            unsafe {
+                let lib =
+                    Library::new(self.plugin_path.join("lib".to_string() + plugin.name.to_owned().as_str() + ".so"))
+                        .expect("Failed to load plugin library");
+
+                let initialize: Symbol<unsafe extern "C" fn(*const c_char) -> i32> =
+                    lib.get(b"initialize").unwrap();
+
+                let config_json = serde_json::to_string(&plugin.get_config()).unwrap();
+                let config_cstr = CString::new(config_json).unwrap();
+
+                initialize(config_cstr.as_ptr());
+
+                self.plugins.push(RunnerPlugin {
+                    name: plugin.name.clone(),
+                    plugin: lib,
+                });
+            }
+            /*
+            let wasm_file = Wasm::file(self.plugin_path.join(plugin.name.to_owned() + ".wasm"));
+            let manifest = Manifest::new([wasm_file]);
+            let builder = PluginBuilder::new(manifest).with_wasi(true);
+            self.plugins.push(RunnerPlugin {
+                name: plugin.name.clone(),
+                plugin: Arc::new(Mutex::new(builder.build().unwrap())),
+            });
+            */
+        }
+
         let tasks = self.workflow.get_tasks();
         if tasks.is_empty() {
             return;
@@ -41,12 +86,29 @@ impl Runner {
         self.determine_order().expect("Failed to determine order");
     }
 
+    pub fn teardown(&self) {
+        for plugin in self.plugins.iter() {
+            unsafe {
+                let teardown: Symbol<unsafe extern "C" fn() -> i32> =
+                    plugin.plugin.get(b"teardown").unwrap();
+                teardown();
+            }
+        }
+    }
+
     fn determine_order(&mut self) -> Result<(), String> {
         let tasks = self.workflow.get_tasks();
         let mut graph: HashMap<String, HashSet<String>> = HashMap::new();
         let mut in_degree: HashMap<String, usize> = HashMap::new();
+        let mut non_runnable_tasks = HashSet::new();
 
         for (task, dependencies) in tasks {
+            if let Some(run) = &dependencies.run {
+                if !run {
+                    non_runnable_tasks.insert(task.clone());
+                }
+            }
+
             graph.entry(task.clone()).or_default();
             in_degree.entry(task.clone()).or_insert(0);
 
@@ -73,7 +135,7 @@ impl Runner {
 
         let mut queue: VecDeque<String> = in_degree
             .iter()
-            .filter(|&(_, &deg)| deg == 0)
+            .filter(|&(task, &deg)| deg == 0 && !non_runnable_tasks.contains(task))
             .map(|(task, _)| task.clone())
             .collect();
 
@@ -92,7 +154,7 @@ impl Runner {
                     for dependent in dependents {
                         if let Some(degree) = in_degree.get_mut(dependent) {
                             *degree -= 1;
-                            if *degree == 0 {
+                            if *degree == 0 && !non_runnable_tasks.contains(dependent) {
                                 queue.push_back(dependent.clone());
                             }
                         }
@@ -105,7 +167,12 @@ impl Runner {
             }
         }
 
-        if visited.len() != tasks.len() {
+        let runnable_task_count = tasks
+            .keys()
+            .filter(|task| !non_runnable_tasks.contains(*task))
+            .count();
+
+        if visited.len() != runnable_task_count {
             return Err("Cycle detected in task dependencies".to_string());
         }
 
@@ -146,78 +213,113 @@ impl Runner {
 
     async fn execute_task(&self, task_name: &str) {
         let task = self.workflow.get_task(task_name).unwrap();
+        let mut success;
 
-        let mut env: Vec<(String, String)> = vec![];
-        if let Some(task_env) = task.get_env() {
-            for (key, value) in task_env.iter() {
-                env.push((key.clone(), value.as_str().unwrap().to_string()));
+        if let Some(command) = &task.command {
+            let mut env: Vec<(String, String)> = vec![];
+            if let Some(task_env) = task.get_env() {
+                for (key, value) in task_env.iter() {
+                    env.push((key.clone(), value.as_str().unwrap().to_string()));
+                }
             }
-        }
 
-        let output = tokio::process::Command::new("sh")
-            .arg("-c")
-            .arg(&task.command)
-            .envs(env.clone())
-            .output()
-            .await;
+            let output = tokio::process::Command::new("sh")
+                .arg("-c")
+                .arg(command)
+                .envs(env.clone())
+                .output()
+                .await;
 
-        let mut success = output
-            .map(|o| {
-                if !o.stdout.is_empty() {
-                    println!(
-                        "Task `{}` stdout:\n{}",
-                        task_name,
-                        String::from_utf8_lossy(&o.stdout)
-                    );
+            success = output
+                .map(|o| {
+                    if !o.stdout.is_empty() {
+                        println!(
+                            "Task `{}` stdout:\n{}",
+                            task_name,
+                            String::from_utf8_lossy(&o.stdout)
+                        );
+                    }
+                    if !o.stderr.is_empty() {
+                        eprintln!(
+                            "Task `{}` stderr:\n{}",
+                            task_name,
+                            String::from_utf8_lossy(&o.stderr)
+                        );
+                    }
+                    o.status.success()
+                })
+                .unwrap_or(false);
+
+            if let Some(retry) = task.retry {
+                let mut retries = 0;
+                while !success && retries < retry {
+                    retries += 1;
+                    if let Some(delay) = task.retry_delay {
+                        tokio::time::sleep(std::time::Duration::from_secs(delay as u64)).await;
+                    }
+
+                    let output = tokio::process::Command::new("sh")
+                        .arg("-c")
+                        .arg(command)
+                        .envs(env.clone())
+                        .output()
+                        .await;
+
+                    success = output
+                        .map(|o| {
+                            if !o.stdout.is_empty() {
+                                println!(
+                                    "Task `{}` retry #{} stdout:\n{}",
+                                    task_name,
+                                    retries,
+                                    String::from_utf8_lossy(&o.stdout)
+                                );
+                            }
+                            if !o.stderr.is_empty() {
+                                eprintln!(
+                                    "Task `{}` retry #{} stderr:\n{}",
+                                    task_name,
+                                    retries,
+                                    String::from_utf8_lossy(&o.stderr)
+                                );
+                            }
+                            o.status.success()
+                        })
+                        .unwrap_or(false);
                 }
-                if !o.stderr.is_empty() {
-                    eprintln!(
-                        "Task `{}` stderr:\n{}",
-                        task_name,
-                        String::from_utf8_lossy(&o.stderr)
-                    );
-                }
-                o.status.success()
-            })
-            .unwrap_or(false);
-
-        if let Some(retry) = task.retry {
-            let mut retries = 0;
-            while !success && retries < retry {
-                retries += 1;
-                if let Some(delay) = task.retry_delay {
-                    tokio::time::sleep(std::time::Duration::from_secs(delay as u64)).await;
-                }
-
-                let output = tokio::process::Command::new("sh")
-                    .arg("-c")
-                    .arg(&task.command)
-                    .envs(env.clone())
-                    .output()
-                    .await;
-
-                success = output
-                    .map(|o| {
-                        if !o.stdout.is_empty() {
-                            println!(
-                                "Task `{}` retry #{} stdout:\n{}",
-                                task_name,
-                                retries,
-                                String::from_utf8_lossy(&o.stdout)
-                            );
-                        }
-                        if !o.stderr.is_empty() {
-                            eprintln!(
-                                "Task `{}` retry #{} stderr:\n{}",
-                                task_name,
-                                retries,
-                                String::from_utf8_lossy(&o.stderr)
-                            );
-                        }
-                        o.status.success()
-                    })
-                    .unwrap_or(false);
             }
+        } else if let Some(plugin) = &task.plugin {
+            let plugin = self
+                .plugins
+                .iter()
+                .find(|p| &p.name == plugin)
+                .expect("Plugin not found");
+
+            let config = task.get_config().unwrap();
+            let mut env: Vec<(String, String)> = vec![];
+            if let Some(task_env) = task.get_env() {
+                for (key, value) in task_env.iter() {
+                    env.push((key.clone(), value.as_str().unwrap().to_string()));
+                }
+            }
+
+            /*
+            let mut lock = plugin.plugin.lock().expect("f");
+            let output = lock.call::<&str, i64>("execute", config.to_string().as_str());
+            println!("Output: {:?}", output);
+            */
+            unsafe {
+                let execute: Symbol<unsafe extern "C" fn(*const c_char) -> i32> =
+                    plugin.plugin.get(b"execute").unwrap();
+
+                let config_json = serde_json::to_string(&config).unwrap();
+                let config_cstr = CString::new(config_json).unwrap();
+
+                execute(config_cstr.as_ptr());
+            }
+            success = true;
+        } else {
+            panic!("Task `{}` has no command or plugin", task_name);
         }
 
         if let Some(runner_task) = self.tasks.get(task_name) {
@@ -241,6 +343,30 @@ impl Runner {
                 handle.await.unwrap();
             }
         }
+
+        if let Some(on_finish) = self.workflow.get_on_finish() {
+            for finish in on_finish.iter() {
+                match finish {
+                    Dependency::Simple(task) => {
+                        if self.needs_run(task) {
+                            self.run(task).await;
+                        }
+                    }
+                    Dependency::Status(dep) => {
+                        let task = dep.keys().next().unwrap();
+                        let required_status = dep.get(task).unwrap().as_str().unwrap();
+                        if self.needs_run(task) {
+                            self.run(task).await;
+                        }
+                        if !self.check_dependency_status(task, required_status) {
+                            panic!("On finish task did not satisfy state {}: {}, terminating workflow!", required_status, task);
+                        }
+                    }
+                }
+            }
+        }
+
+        self.teardown();
     }
 
     fn check_dependency_status(&self, task: &str, status: &str) -> bool {

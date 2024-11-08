@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use std::fs::File;
 use std::io::Write;
+use std::path::PathBuf;
 use std::sync::Arc;
 use toml::to_string;
 
@@ -36,6 +37,8 @@ enum Commands {
     Run {
         /// The name of the workflow
         name: String,
+        /// Directory to search for plugins
+        plugins: Option<PathBuf>,
     },
 }
 
@@ -75,9 +78,12 @@ async fn main() {
                 println!("Deleting workflow: {}", name);
             }
         }
-        Some(Commands::Run { name }) => {
+        Some(Commands::Run { name, plugins }) => {
             let workflow = read_workflow(&format!("{}.toml", name)).unwrap();
-            let mut runner = Runner::new(workflow);
+            let mut runner = Runner::new(
+                workflow,
+                plugins.clone().unwrap_or(PathBuf::from("./plugins")),
+            );
             runner.load();
             Arc::new(runner).run_all().await;
         }

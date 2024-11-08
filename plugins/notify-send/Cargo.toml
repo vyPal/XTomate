@@ -1,0 +1,12 @@
+[package]
+name = "notify-send"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+libc = "0.2.162"
+serde = { version = "1.0.214", features = ["derive"] }
+serde_json = "1.0.132"
+
+[lib]
+crate-type = ["dylib"]
