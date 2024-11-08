@@ -27,3 +27,4 @@ Cargo.lock
 /testdir
 xtomate.log
 **/*.so
+/plugins
