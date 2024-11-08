@@ -9,6 +9,8 @@ use workflow::runner::Runner;
 use workflow::structure::{Dependency, WorkFlow};
 
 mod workflow;
+mod plugins;
+mod config;
 
 #[derive(Parser)]
 #[command(name = "XTomate", version, about)]
@@ -79,6 +81,7 @@ async fn main() {
             }
         }
         Some(Commands::Run { name, plugins }) => {
+            let config = config::Config::load_or_default(true).unwrap();
             let workflow = read_workflow(&format!("{}.toml", name)).unwrap();
             let mut runner = Runner::new(
                 workflow,
