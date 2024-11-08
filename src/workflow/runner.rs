@@ -1,12 +1,12 @@
+use libloading::{Library, Symbol};
+use serde_json;
+use std::ffi::CString;
+use std::os::raw::c_char;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     path::PathBuf,
     sync::{Arc, Mutex},
 };
-use serde_json;
-use std::ffi::{CString};
-use std::os::raw::c_char;
-use libloading::{Library, Symbol};
 
 use super::structure::{Dependency, WorkFlow};
 
@@ -42,9 +42,15 @@ impl Runner {
         let plugins = self.workflow.get_plugins();
         for plugin in plugins {
             unsafe {
-                let lib =
-                    Library::new(self.plugin_path.join("lib".to_string() + plugin.name.to_owned().as_str() + ".so"))
-                        .expect("Failed to load plugin library");
+                let lib_filename = match std::env::consts::OS {
+                    "linux" => format!("lib{}.so", plugin.name),
+                    "macos" => format!("lib{}.dylib", plugin.name),
+                    "windows" => format!("{}.dll", plugin.name),
+                    _ => panic!("Unsupported OS"),
+                };
+
+                let lib_path = self.plugin_path.join(lib_filename);
+                let lib = Library::new(lib_path).expect("Failed to load plugin");
 
                 let initialize: Symbol<unsafe extern "C" fn(*const c_char) -> i32> =
                     lib.get(b"initialize").unwrap();
