@@ -35,6 +35,8 @@ pub enum Dependency {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Plugin {
     pub name: String,
+    pub source: String,
+    pub version: Option<String>,
     config: Option<Table>,
 }
 

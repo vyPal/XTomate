@@ -4,10 +4,10 @@ use std::ffi::CString;
 use std::os::raw::c_char;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    path::PathBuf,
     sync::{Arc, Mutex},
-    env::consts::{DLL_PREFIX, DLL_SUFFIX},
 };
+
+use crate::plugins;
 
 use super::structure::{Dependency, WorkFlow};
 
@@ -15,7 +15,7 @@ pub struct Runner {
     workflow: WorkFlow,
     tasks: HashMap<String, RunnerTask>,
     order: Vec<Vec<String>>,
-    plugin_path: PathBuf,
+    plugin_manager: plugins::manager::PluginManager,
     plugins: Vec<RunnerPlugin>,
 }
 
@@ -29,12 +29,12 @@ struct RunnerTask {
 }
 
 impl Runner {
-    pub fn new(workflow: WorkFlow, plugin_path: PathBuf) -> Self {
+    pub fn new(workflow: WorkFlow, plugin_manager: plugins::manager::PluginManager) -> Self {
         Runner {
             workflow,
             tasks: HashMap::new(),
             order: vec![],
-            plugin_path,
+            plugin_manager,
             plugins: vec![],
         }
     }
@@ -43,10 +43,19 @@ impl Runner {
         let plugins = self.workflow.get_plugins();
         for plugin in plugins {
             unsafe {
-                let lib_filename = format!("{}{}.{}", DLL_PREFIX, plugin.name, DLL_SUFFIX);
+                self.plugin_manager
+                    .verify_plugin(
+                        plugin.name.clone(),
+                        plugin.source.clone(),
+                        plugin.version.clone(),
+                    )
+                    .unwrap();
 
-                let lib_path = self.plugin_path.join(lib_filename);
-                let lib = Library::new(lib_path).expect("Failed to load plugin");
+                let lib_path = self
+                    .plugin_manager
+                    .get_plugin(plugin.name.as_str())
+                    .unwrap();
+                let lib = Library::new(lib_path.get_install_path()).expect("Failed to load plugin");
 
                 let initialize: Symbol<unsafe extern "C" fn(*const c_char) -> i32> =
                     lib.get(b"initialize").unwrap();

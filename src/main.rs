@@ -8,9 +8,9 @@ use toml::to_string;
 use workflow::runner::Runner;
 use workflow::structure::{Dependency, WorkFlow};
 
-mod workflow;
-mod plugins;
 mod config;
+mod plugins;
+mod workflow;
 
 #[derive(Parser)]
 #[command(name = "XTomate", version, about)]
@@ -39,8 +39,6 @@ enum Commands {
     Run {
         /// The name of the workflow
         name: String,
-        /// Directory to search for plugins
-        plugins: Option<PathBuf>,
     },
 }
 
@@ -80,13 +78,15 @@ async fn main() {
                 println!("Deleting workflow: {}", name);
             }
         }
-        Some(Commands::Run { name, plugins }) => {
+        Some(Commands::Run { name }) => {
             let config = config::Config::load_or_default(true).unwrap();
+            let plugin_manager = plugins::manager::PluginManager::load_or_default(
+                PathBuf::from(config.get_plugin_dir()),
+                true,
+            )
+            .unwrap();
             let workflow = read_workflow(&format!("{}.toml", name)).unwrap();
-            let mut runner = Runner::new(
-                workflow,
-                plugins.clone().unwrap_or(PathBuf::from("./plugins")),
-            );
+            let mut runner = Runner::new(workflow, plugin_manager);
             runner.load();
             Arc::new(runner).run_all().await;
         }

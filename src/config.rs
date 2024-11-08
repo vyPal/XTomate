@@ -9,15 +9,14 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(plugin_dir: String) -> Self {
-        Config {
-            plugin_dir,
-        }
-    }
-
     pub fn default() -> Self {
         Config {
-            plugin_dir: ProjectDirs::from("me", "vyPal", "XTomate").unwrap().data_dir().to_str().unwrap().to_string(),
+            plugin_dir: ProjectDirs::from("me", "vyPal", "XTomate")
+                .unwrap()
+                .data_dir()
+                .to_str()
+                .unwrap()
+                .to_string(),
         }
     }
 
@@ -26,15 +25,22 @@ impl Config {
     }
 
     pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
-        let config_path = ProjectDirs::from("me", "vyPal", "XTomate").unwrap().config_dir().join("config.toml");
+        let config_path = ProjectDirs::from("me", "vyPal", "XTomate")
+            .unwrap()
+            .config_dir()
+            .join("config.toml");
         let config = std::fs::read_to_string(config_path)?;
         let config: Config = toml::from_str(&config)?;
         Ok(config)
     }
 
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let config_path = ProjectDirs::from("me", "vyPal", "XTomate").unwrap().config_dir().join("config.toml");
+        let config_path = ProjectDirs::from("me", "vyPal", "XTomate")
+            .unwrap()
+            .config_dir()
+            .join("config.toml");
         let toml_string = toml::to_string(self)?;
+        std::fs::create_dir_all(config_path.clone())?;
         let mut file = File::create(config_path)?;
         file.write_all(toml_string.as_bytes())?;
         Ok(())

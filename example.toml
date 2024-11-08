@@ -6,9 +6,11 @@ on_finish = ["notify_send", "log_done"]
 
 [[plugins]]
 name = "notify_send"
+source = "https://github.com/vyPal/xtomate-plugin-notify-send"
 config = { app_name = "XTomate" }
 [[plugins]]
 name = "logger"
+source = "https://github.com/vyPal/xtomate-plugin-logger"
 config = { app_name = "XTomate", log_file = "xtomate.log" }
 
 [tasks.notify_send]
