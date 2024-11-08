@@ -320,6 +320,28 @@ impl Runner {
     }
 
     pub async fn run_all(self: Arc<Self>) {
+        if let Some(on_start) = self.workflow.get_on_start() {
+            for finish in on_start.iter() {
+                match finish {
+                    Dependency::Simple(task) => {
+                        if self.needs_run(task) {
+                            self.run(task).await;
+                        }
+                    }
+                    Dependency::Status(dep) => {
+                        let task = dep.keys().next().unwrap();
+                        let required_status = dep.get(task).unwrap().as_str().unwrap();
+                        if self.needs_run(task) {
+                            self.run(task).await;
+                        }
+                        if !self.check_dependency_status(task, required_status) {
+                            panic!("On finish task did not satisfy state {}: {}, terminating workflow!", required_status, task);
+                        }
+                    }
+                }
+            }
+        }
+
         for stage in self.order.iter() {
             let mut handles = vec![];
             for task in stage {

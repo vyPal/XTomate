@@ -1,16 +1,30 @@
 name = "example"
 version = "0.1.0"
 
-on_finish = ["notify_send"]
+on_start = ["log_start"]
+on_finish = ["notify_send", "log_done"]
 
 [[plugins]]
 name = "notify_send"
 config = { app_name = "XTomate" }
+[[plugins]]
+name = "logger"
+config = { app_name = "XTomate", log_file = "xtomate.log" }
 
 [tasks.notify_send]
 run = false
 plugin = "notify_send"
 config = { message = "Workflow finished" }
+
+[tasks.log_done]
+run = false
+plugin = "logger"
+config = { message = "Workflow finished", level = "info", sub_app_name = "Status" }
+
+[tasks.log_start]
+run = false
+plugin = "logger"
+config = { message = "Workflow started", level = "info", sub_app_name = "Status" }
 
 [tasks.prepdir]
 command = """

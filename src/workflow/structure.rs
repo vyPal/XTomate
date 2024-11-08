@@ -7,6 +7,7 @@ pub struct WorkFlow {
     pub name: String,
     pub version: String,
     pub description: Option<String>,
+    on_start: Option<Vec<Dependency>>,
     on_finish: Option<Vec<Dependency>>,
     tasks: HashMap<String, Task>,
     plugins: Vec<Plugin>,
@@ -44,6 +45,7 @@ impl WorkFlow {
             version,
             description,
             on_finish: None,
+            on_start: None,
             tasks: HashMap::new(),
             plugins: vec![],
         }
@@ -84,6 +86,10 @@ impl WorkFlow {
 
     pub fn get_on_finish(&self) -> Option<&Vec<Dependency>> {
         self.on_finish.as_ref()
+    }
+
+    pub fn get_on_start(&self) -> Option<&Vec<Dependency>> {
+        self.on_start.as_ref()
     }
 }
 
