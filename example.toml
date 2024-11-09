@@ -2,7 +2,7 @@ name = "example"
 version = "0.1.0"
 
 on_start = ["log_start"]
-on_finish = ["notify_send", "log_done"]
+on_finish = ["notify_send", "log_done", "clean"]
 
 [[plugins]]
 name = "notify_send"
@@ -14,6 +14,10 @@ name = "logger"
 source = "vyPal/xtomate-plugin-logger"
 version = "^0.1.0"
 config = { app_name = "XTomate", log_file = "xtomate.log" }
+
+[[templates]]
+name = "echo"
+command = "echo \"{{MESSAGE}}\" {{PIPE}}"
 
 [tasks.notify_send]
 run = false
@@ -30,6 +34,11 @@ run = false
 plugin = "logger"
 config = { message = "Workflow started", level = "info", sub_app_name = "Status" }
 
+[tasks.clean]
+run = false
+command = "rm -rf testdir"
+dependencies = [{"prepdir" = "success"}]
+
 [tasks.prepdir]
 command = """
 mkdir testdir
@@ -38,15 +47,13 @@ touch hello.py
 """
 
 [tasks.createprogram]
-command = '''
-echo "print('hello world')" > testdir/hello.py
-'''
+template = "echo"
+config = { MESSAGE = "print('hello world')", PIPE = "> testdir/hello.py" }
 dependencies = [{"prepdir" = "success"}]
 
 [tasks.writefile]
-command = '''
-echo "$WORLD $HELLO" > testdir/hello.txt
-'''
+template = "echo"
+config = { MESSAGE = "$WORLD $HELLO", PIPE = "> testdir/hello.txt" }
 dependencies = [{"prepdir" = "success"}]
 env = {HELLO = "world", WORLD = "hello"}
 

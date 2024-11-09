@@ -271,7 +271,6 @@ fn is_git_url(source: &mut String) -> bool {
     false
 }
 
-
 struct State {
     progress: Option<Progress<'static>>,
     total: usize,

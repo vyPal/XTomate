@@ -10,6 +10,7 @@ use std::{
 
 use crate::plugins;
 
+use super::placeholders::Context;
 use super::structure::{Dependency, WorkFlow};
 
 pub struct Runner {
@@ -51,34 +52,37 @@ impl Runner {
         }
 
         let plugins = self.workflow.get_plugins();
-        for plugin in plugins {
-            unsafe {
-                self.plugin_manager
-                    .verify_plugin(
-                        plugin.name.clone(),
-                        plugin.source.clone(),
-                        plugin.version.clone(),
-                    )
-                    .unwrap();
+        if let Some(plugins) = plugins {
+            for plugin in plugins {
+                unsafe {
+                    self.plugin_manager
+                        .verify_plugin(
+                            plugin.name.clone(),
+                            plugin.source.clone(),
+                            plugin.version.clone(),
+                        )
+                        .unwrap();
 
-                let lib_path = self
-                    .plugin_manager
-                    .get_plugin(plugin.name.as_str())
-                    .unwrap();
-                let lib = Library::new(lib_path.get_install_path()).expect("Failed to load plugin");
+                    let lib_path = self
+                        .plugin_manager
+                        .get_plugin(plugin.name.as_str())
+                        .unwrap();
+                    let lib =
+                        Library::new(lib_path.get_install_path()).expect("Failed to load plugin");
 
-                let initialize: Symbol<unsafe extern "C" fn(*const c_char) -> i32> =
-                    lib.get(b"initialize").unwrap();
+                    let initialize: Symbol<unsafe extern "C" fn(*const c_char) -> i32> =
+                        lib.get(b"initialize").unwrap();
 
-                let config_json = serde_json::to_string(&plugin.get_config()).unwrap();
-                let config_cstr = CString::new(config_json).unwrap();
+                    let config_json = serde_json::to_string(&plugin.get_config()).unwrap();
+                    let config_cstr = CString::new(config_json).unwrap();
 
-                initialize(config_cstr.as_ptr());
+                    initialize(config_cstr.as_ptr());
 
-                self.plugins.push(RunnerPlugin {
-                    name: plugin.name.clone(),
-                    plugin: lib,
-                });
+                    self.plugins.push(RunnerPlugin {
+                        name: plugin.name.clone(),
+                        plugin: lib,
+                    });
+                }
             }
         }
 
@@ -225,113 +229,208 @@ impl Runner {
 
     async fn execute_task(&self, task_name: &str) {
         let task = self.workflow.get_task(task_name).unwrap();
-        let mut success;
+        let success;
 
-        if let Some(command) = &task.command {
-            let mut env: Vec<(String, String)> = vec![];
-            if let Some(task_env) = task.get_env() {
-                for (key, value) in task_env.iter() {
-                    env.push((key.clone(), value.as_str().unwrap().to_string()));
+        let mut context = Context::new();
+
+        if task.template.is_some() {
+            if let Some(config) = task.get_config() {
+                for (key, value) in config.iter() {
+                    context.set(key.clone(), value.as_str().unwrap().to_string());
                 }
             }
-
-            let output = tokio::process::Command::new("sh")
-                .arg("-c")
-                .arg(command)
-                .envs(env.clone())
-                .output()
-                .await;
-
-            success = output
-                .map(|o| {
-                    if !o.stdout.is_empty() {
-                        println!(
-                            "Task `{}` stdout:\n{}",
-                            task_name,
-                            String::from_utf8_lossy(&o.stdout)
-                        );
-                    }
-                    if !o.stderr.is_empty() {
-                        eprintln!(
-                            "Task `{}` stderr:\n{}",
-                            task_name,
-                            String::from_utf8_lossy(&o.stderr)
-                        );
-                    }
-                    o.status.success()
-                })
-                .unwrap_or(false);
-
-            if let Some(retry) = task.retry {
-                let mut retries = 0;
-                while !success && retries < retry {
-                    retries += 1;
-                    if let Some(delay) = task.retry_delay {
-                        tokio::time::sleep(std::time::Duration::from_secs(delay as u64)).await;
-                    }
-
-                    let output = tokio::process::Command::new("sh")
-                        .arg("-c")
-                        .arg(command)
-                        .envs(env.clone())
-                        .output()
-                        .await;
-
-                    success = output
-                        .map(|o| {
-                            if !o.stdout.is_empty() {
-                                println!(
-                                    "Task `{}` retry #{} stdout:\n{}",
-                                    task_name,
-                                    retries,
-                                    String::from_utf8_lossy(&o.stdout)
-                                );
-                            }
-                            if !o.stderr.is_empty() {
-                                eprintln!(
-                                    "Task `{}` retry #{} stderr:\n{}",
-                                    task_name,
-                                    retries,
-                                    String::from_utf8_lossy(&o.stderr)
-                                );
-                            }
-                            o.status.success()
-                        })
-                        .unwrap_or(false);
-                }
-            }
-        } else if let Some(plugin) = &task.plugin {
-            let plugin = self
-                .plugins
-                .iter()
-                .find(|p| &p.name == plugin)
-                .expect("Plugin not found");
-
-            let config = task.get_config().unwrap();
-            let mut env: Vec<(String, String)> = vec![];
-            if let Some(task_env) = task.get_env() {
-                for (key, value) in task_env.iter() {
-                    env.push((key.clone(), value.as_str().unwrap().to_string()));
-                }
-            }
-
-            unsafe {
-                let execute: Symbol<unsafe extern "C" fn(*const c_char) -> i32> =
-                    plugin.plugin.get(b"execute").unwrap();
-
-                let config_json = serde_json::to_string(&config).unwrap();
-                let config_cstr = CString::new(config_json).unwrap();
-
-                execute(config_cstr.as_ptr());
-            }
-            success = true;
+            success = self.execute_template(&task_name, &mut context).await;
+        } else if task.command.is_some() {
+            success = self.execute_command(&task_name, &mut context).await;
+        } else if task.plugin.is_some() {
+            success = self.execute_plugin(&task_name, &mut context).await;
         } else {
-            panic!("Task `{}` has no command or plugin", task_name);
+            panic!("Task `{}` has no command, plugin, or template", task_name);
         }
-
         if let Some(runner_task) = self.tasks.get(task_name) {
             *runner_task.success.lock().expect("Failed to lock mutex") = Some(success);
         }
+    }
+
+    async fn execute_template(&self, task_name: &str, context: &mut Context) -> bool {
+        let task = self.workflow.get_task(task_name).unwrap();
+        let template = self
+            .workflow
+            .get_template(task.template.clone().unwrap().as_str())
+            .expect("Template not found");
+
+        let mut env: Vec<(String, String)> = vec![];
+
+        if let Some(task_env) = task.get_env() {
+            for (key, value) in task_env.iter() {
+                let resolved_value = context.resolve(value.as_str().unwrap());
+                env.push((key.clone(), resolved_value));
+            }
+        }
+        if let Some(template_env) = template.get_env() {
+            for (key, value) in template_env.iter() {
+                let resolved_value = context.resolve(value.as_str().unwrap());
+                env.push((key.clone(), resolved_value));
+            }
+        }
+
+        if let Some(dependencies) = template.get_dependencies() {
+            for dep in dependencies.iter() {
+                match dep {
+                    Dependency::Simple(dependency) => {
+                        if self.needs_run(dependency) {
+                            Box::pin(self.run(dependency)).await;
+                        }
+                        if !self.check_dependency_status(dependency, "success") {
+                            panic!("Dependency failed: {}, terminating workflow!", dependency);
+                        }
+                    }
+                    Dependency::Status(dep) => {
+                        let dependency = dep.keys().next().unwrap();
+                        let required_status = dep.get(dependency).unwrap().as_str().unwrap();
+                        if self.needs_run(dependency) {
+                            Box::pin(self.run(dependency)).await;
+                        }
+                        if !self.check_dependency_status(dependency, required_status) {
+                            panic!(
+                                "Dependency did not satisfy state {}: {}, terminating workflow!",
+                                required_status, dependency
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        let output = tokio::process::Command::new("sh")
+            .arg("-c")
+            .arg(context.resolve(template.command.as_ref().unwrap()))
+            .envs(env.clone())
+            .output()
+            .await;
+
+        let mut success = output
+            .map(|o| {
+                if !o.stdout.is_empty() {
+                    println!(
+                        "Task `{}` stdout:\n{}",
+                        task_name,
+                        String::from_utf8_lossy(&o.stdout)
+                    );
+                }
+                if !o.stderr.is_empty() {
+                    eprintln!(
+                        "Task `{}` stderr:\n{}",
+                        task_name,
+                        String::from_utf8_lossy(&o.stderr)
+                    );
+                }
+                o.status.success()
+            })
+            .unwrap_or(false);
+
+        if let Some(retry) = task.retry {
+            let mut retries = 0;
+            while !success && retries < retry {
+                retries += 1;
+                if let Some(delay) = task.retry_delay {
+                    tokio::time::sleep(std::time::Duration::from_secs(delay as u64)).await;
+                }
+
+                let output = tokio::process::Command::new("sh")
+                    .arg("-c")
+                    .arg(context.resolve(template.command.as_ref().unwrap()))
+                    .envs(env.clone())
+                    .output()
+                    .await;
+
+                success = output.map(|o| o.status.success()).unwrap_or(false);
+            }
+        }
+
+        success
+    }
+
+    async fn execute_command(&self, task_name: &str, context: &mut Context) -> bool {
+        let task = self.workflow.get_task(task_name).unwrap();
+        let mut env: Vec<(String, String)> = vec![];
+
+        if let Some(task_env) = task.get_env() {
+            for (key, value) in task_env.iter() {
+                let resolved_value = context.resolve(value.as_str().unwrap());
+                env.push((key.clone(), resolved_value));
+            }
+        }
+
+        let output = tokio::process::Command::new("sh")
+            .arg("-c")
+            .arg(task.command.as_ref().unwrap())
+            .envs(env.clone())
+            .output()
+            .await;
+
+        let mut success = output
+            .map(|o| {
+                if !o.stdout.is_empty() {
+                    println!(
+                        "Task `{}` stdout:\n{}",
+                        task_name,
+                        String::from_utf8_lossy(&o.stdout)
+                    );
+                }
+                if !o.stderr.is_empty() {
+                    eprintln!(
+                        "Task `{}` stderr:\n{}",
+                        task_name,
+                        String::from_utf8_lossy(&o.stderr)
+                    );
+                }
+                o.status.success()
+            })
+            .unwrap_or(false);
+
+        if let Some(retry) = task.retry {
+            let mut retries = 0;
+            while !success && retries < retry {
+                retries += 1;
+                if let Some(delay) = task.retry_delay {
+                    tokio::time::sleep(std::time::Duration::from_secs(delay as u64)).await;
+                }
+
+                let output = tokio::process::Command::new("sh")
+                    .arg("-c")
+                    .arg(task.command.as_ref().unwrap())
+                    .envs(env.clone())
+                    .output()
+                    .await;
+
+                success = output.map(|o| o.status.success()).unwrap_or(false);
+            }
+        }
+
+        success
+    }
+
+    async fn execute_plugin(&self, task_name: &str, context: &mut Context) -> bool {
+        let task = self.workflow.get_task(task_name).unwrap();
+        let plugin = self
+            .plugins
+            .iter()
+            .find(|p| &p.name == task.plugin.clone().unwrap().as_str())
+            .expect("Plugin not found");
+
+        let config = task.get_config().unwrap();
+        let config_resolved = context.resolve(&serde_json::to_string(&config).unwrap());
+
+        unsafe {
+            let execute: Symbol<unsafe extern "C" fn(*const c_char) -> i32> =
+                plugin.plugin.get(b"execute").unwrap();
+
+            let config_cstr = CString::new(config_resolved).unwrap();
+            execute(config_cstr.as_ptr());
+        }
+
+        true
     }
 
     pub async fn run_all(self: Arc<Self>) {

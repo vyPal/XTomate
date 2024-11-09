@@ -10,12 +10,14 @@ pub struct WorkFlow {
     on_start: Option<Vec<Dependency>>,
     on_finish: Option<Vec<Dependency>>,
     tasks: HashMap<String, Task>,
-    plugins: Vec<Plugin>,
+    plugins: Option<Vec<Plugin>>,
+    templates: Option<Vec<TaskTemplate>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Task {
     pub command: Option<String>,
+    pub template: Option<String>,
     pub retry: Option<usize>,
     pub retry_delay: Option<usize>,
     pub run: Option<bool>,
@@ -23,6 +25,17 @@ pub struct Task {
     config: Option<Table>,
     env: Option<Table>,
     dependencies: Option<Vec<Dependency>>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TaskTemplate {
+    pub name: String,
+    pub command: Option<String>,
+    pub retry: Option<usize>,
+    pub retry_delay: Option<usize>,
+    pub run: Option<bool>,
+    pub env: Option<Table>,
+    pub dependencies: Option<Vec<Dependency>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -49,7 +62,8 @@ impl WorkFlow {
             on_finish: None,
             on_start: None,
             tasks: HashMap::new(),
-            plugins: vec![],
+            plugins: None,
+            templates: None,
         }
     }
 
@@ -64,6 +78,7 @@ impl WorkFlow {
             Task {
                 command: Some(command),
                 plugin: None,
+                template: None,
                 config: None,
                 run: None,
                 retry: None,
@@ -82,7 +97,7 @@ impl WorkFlow {
         &self.tasks
     }
 
-    pub fn get_plugins(&self) -> &Vec<Plugin> {
+    pub fn get_plugins(&self) -> Option<&Vec<Plugin>> {
         self.plugins.as_ref()
     }
 
@@ -93,6 +108,15 @@ impl WorkFlow {
     pub fn get_on_start(&self) -> Option<&Vec<Dependency>> {
         self.on_start.as_ref()
     }
+
+    pub fn get_template(&self, name: &str) -> Option<&TaskTemplate> {
+        self.templates
+            .as_ref()
+            .clone()
+            .expect("No templates defined")
+            .iter()
+            .find(|t| t.name == name)
+    }
 }
 
 impl Task {
@@ -102,6 +126,16 @@ impl Task {
 
     pub fn get_config(&self) -> Option<&Table> {
         self.config.as_ref()
+    }
+
+    pub fn get_env(&self) -> Option<&Table> {
+        self.env.as_ref()
+    }
+}
+
+impl TaskTemplate {
+    pub fn get_dependencies(&self) -> Option<&Vec<Dependency>> {
+        self.dependencies.as_ref()
     }
 
     pub fn get_env(&self) -> Option<&Table> {
