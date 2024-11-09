@@ -95,7 +95,7 @@ impl PluginManager {
         let plugin = self.get_plugin_mut(&name).unwrap();
         plugin.set_build_path(build_path.clone());
 
-        if is_git_url(&plugin.source) {
+        if is_git_url(&mut plugin.source.to_string()) {
             let state = RefCell::new(State {
                 progress: None,
                 total: 0,
@@ -250,9 +250,27 @@ impl Plugin {
     }
 }
 
-fn is_git_url(source: &str) -> bool {
-    source.starts_with("http://") || source.starts_with("https://") || source.starts_with("git@")
+fn is_git_url(source: &mut String) -> bool {
+    if source.starts_with("http://") || source.starts_with("https://") || source.ends_with(".git") {
+        return true;
+    }
+
+    let parts: Vec<&str> = source.split('/').collect();
+    if parts.len() == 2 {
+        let local_path = Path::new(&source);
+
+        if local_path.exists() {
+            return false;
+        }
+
+        // Directly assign the formatted string to `*source`
+        *source = format!("https://github.com/{}", source);
+        return true;
+    }
+
+    false
 }
+
 
 struct State {
     progress: Option<Progress<'static>>,

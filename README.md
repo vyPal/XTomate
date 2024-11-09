@@ -98,7 +98,7 @@ pub extern "C" fn teardown() -> i32 {
 ```toml
 # Basic workflow information
 name = "example"
-version = "0.1.0"
+version = "0.1.0" # XTomate version required to run the workflow
 
 # Tasks to run on special events
 on_start = ["log_start"]
@@ -107,9 +107,13 @@ on_finish = ["notify_send", "log_done"]
 # Plugin configurations
 [[plugins]]
 name = "notify_send" # Plugin name
+source = "https://github.com/vyPal/xtomate-plugin-notify-send" # Plugin source
+version = "^0.1.0" # Plugin version
 config = { app_name = "XTomate" } # Plugin configuration
 [[plugins]]
 name = "logger"
+source = "vyPal/xtomate-plugin-logger" # Shorter way to write source
+version = "^0.1.0"
 config = { app_name = "XTomate", log_file = "xtomate.log" }
 
 # Task configurations

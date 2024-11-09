@@ -11,7 +11,7 @@ version = "^0.1.0"
 config = { app_name = "XTomate" }
 [[plugins]]
 name = "logger"
-source = "https://github.com/vyPal/xtomate-plugin-logger"
+source = "vyPal/xtomate-plugin-logger"
 version = "^0.1.0"
 config = { app_name = "XTomate", log_file = "xtomate.log" }
 
