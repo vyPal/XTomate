@@ -61,7 +61,8 @@ async fn main() {
 
     match &cli.command {
         Some(Commands::Create { name }) => {
-            let mut workflow = WorkFlow::new(name.to_string(), "0.1.0".to_string(), None);
+            let xtomate_version = env!("CARGO_PKG_VERSION");
+            let mut workflow = WorkFlow::new(name.to_string(), xtomate_version.to_string(), None);
             workflow.add_task("task1".to_string(), "echo Hello".to_string(), None);
             workflow.add_task(
                 "task2".to_string(),

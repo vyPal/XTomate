@@ -5,11 +5,12 @@ use std::path::Path;
 use std::process::Command;
 use std::{fs, path::PathBuf};
 
+use colored::*;
 use git2::build::{CheckoutBuilder, RepoBuilder};
 use git2::{FetchOptions, Progress, RemoteCallbacks, Repository};
+use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
-use colored::*;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PluginManager {
@@ -33,6 +34,8 @@ pub struct Plugin {
 pub struct PluginManifest {
     pub name: String,
     pub version: String,
+    #[serde(rename = "runner_version")]
+    pub xtomate_version: String,
     pub build: String,
     pub output_dir: String,
 }
@@ -122,12 +125,18 @@ impl PluginManager {
 
             if let Ok(repo) = Repository::open(build_path.clone()) {
                 let mut remote = repo.remote_anonymous(&plugin.source)?;
-                remote.fetch(&["master"], Some(&mut fo), None)?;
-                let head = repo.revparse_single("HEAD")?;
+                remote.fetch(&["refs/heads/*:refs/remotes/origin/*"], Some(&mut fo), None)?;
+                let default_branch = remote.default_branch()?;
+                let branch_refspec = default_branch.as_str().unwrap_or("refs/heads/main");
+                remote.fetch(&[branch_refspec], Some(&mut fo), None)?;
+                let head = repo.revparse_single("FETCH_HEAD")?;
                 repo.checkout_tree(&head, None)?;
                 repo.set_head_detached(head.id())?;
             } else {
-                RepoBuilder::new().fetch_options(fo).with_checkout(co).clone(&plugin.source, &build_path)?;
+                RepoBuilder::new()
+                    .fetch_options(fo)
+                    .with_checkout(co)
+                    .clone(&plugin.source, &build_path)?;
             }
         } else {
             let local_path = Path::new(&plugin.source);
@@ -144,6 +153,18 @@ impl PluginManager {
 
         if manifest.name != name {
             return Err("Plugin name does not match manifest name".into());
+        }
+
+        let plugin_version_req = VersionReq::parse(&plugin.version.as_ref().unwrap())?;
+        let plugin_version = Version::parse(&manifest.version)?;
+        if !plugin_version_req.matches(&plugin_version) {
+            return Err("Plugin version does not match manifest version".into());
+        }
+
+        let plugin_xtomate_version_req = VersionReq::parse(&manifest.xtomate_version)?;
+        let xtomate_version = Version::parse(env!("CARGO_PKG_VERSION"))?;
+        if !plugin_xtomate_version_req.matches(&xtomate_version) {
+            return Err("XTomate version does not match manifest version".into());
         }
 
         println!("{}", format!("Building plugin: {}", name).green());

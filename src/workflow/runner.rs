@@ -1,4 +1,5 @@
 use libloading::{Library, Symbol};
+use semver::VersionReq;
 use serde_json;
 use std::ffi::CString;
 use std::os::raw::c_char;
@@ -40,6 +41,15 @@ impl Runner {
     }
 
     pub fn load(&mut self) {
+        let version_req = VersionReq::parse(&self.workflow.version).unwrap();
+        if !version_req.matches(&semver::Version::parse(env!("CARGO_PKG_VERSION")).unwrap()) {
+            panic!(
+                "Workflow version mismatch: required {}, found {}",
+                self.workflow.version,
+                env!("CARGO_PKG_VERSION")
+            );
+        }
+
         let plugins = self.workflow.get_plugins();
         for plugin in plugins {
             unsafe {
