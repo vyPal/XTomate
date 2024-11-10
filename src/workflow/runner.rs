@@ -7,6 +7,7 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     sync::{Arc, Mutex},
 };
+use toml::{Table, Value};
 
 use crate::plugins;
 
@@ -233,39 +234,227 @@ impl Runner {
 
         let mut context = Context::new();
 
+        if let Some(on_start) = task.get_on_start() {
+            for finish in on_start.iter() {
+                match finish {
+                    Dependency::Simple(task) => match parse_dependency(task) {
+                        ("task", task) => {
+                            Box::pin(self.run(task)).await;
+                        }
+                        ("template", template) => {
+                            let _ = self.execute_template(
+                                task_name,
+                                template,
+                                &Table::new(),
+                                &mut context,
+                            );
+                        }
+                        ("plugin", plugin) => {
+                            let _ = self
+                                .execute_plugin(plugin, &Table::new(), &mut context)
+                                .await;
+                        }
+                        _ => panic!("Invalid dependency: {}", task),
+                    },
+                    Dependency::Status(dep) => match parse_dependency(dep.keys().next().unwrap()) {
+                        ("task", task) => {
+                            Box::pin(self.run(task)).await;
+                        }
+                        ("template", template) => {
+                            let _ = self.execute_template(
+                                task_name,
+                                template,
+                                &Table::new(),
+                                &mut context,
+                            );
+                        }
+                        ("plugin", plugin) => {
+                            let _ = self
+                                .execute_plugin(
+                                    plugin,
+                                    dep.values()
+                                        .next()
+                                        .unwrap_or(&Value::Table(Table::new()))
+                                        .as_table()
+                                        .unwrap(),
+                                    &mut context,
+                                )
+                                .await;
+                        }
+                        _ => panic!("Invalid dependency: {}", dep.keys().next().unwrap()),
+                    },
+                }
+            }
+        }
+
         if task.template.is_some() {
             if let Some(config) = task.get_config() {
                 for (key, value) in config.iter() {
                     context.set(key.clone(), value.as_str().unwrap().to_string());
                 }
             }
-            success = self.execute_template(&task_name, &mut context).await;
+            success = self
+                .execute_template(
+                    &task_name,
+                    task.template.clone().unwrap().as_str(),
+                    task.get_env().unwrap_or(&Table::new()),
+                    &mut context,
+                )
+                .await;
         } else if task.command.is_some() {
-            success = self.execute_command(&task_name, &mut context).await;
+            success = self
+                .execute_command(
+                    &task_name,
+                    task.command.clone().unwrap().as_str(),
+                    task.get_env().unwrap_or(&Table::new()),
+                    task.retry.unwrap_or(0),
+                    task.retry_delay.unwrap_or(0),
+                    &mut context,
+                )
+                .await;
         } else if task.plugin.is_some() {
-            success = self.execute_plugin(&task_name, &mut context).await;
+            success = self
+                .execute_plugin(
+                    task.plugin.clone().unwrap().as_str(),
+                    task.get_config().unwrap_or(&Table::new()),
+                    &mut context,
+                )
+                .await;
         } else {
             panic!("Task `{}` has no command, plugin, or template", task_name);
         }
+
+        if !success {
+            if let Some(on_error) = task.get_on_error() {
+                for finish in on_error.iter() {
+                    match finish {
+                        Dependency::Simple(task) => match parse_dependency(task) {
+                            ("task", task) => {
+                                Box::pin(self.run(task)).await;
+                            }
+                            ("template", template) => {
+                                let _ = self.execute_template(
+                                    task_name,
+                                    template,
+                                    &Table::new(),
+                                    &mut context,
+                                );
+                            }
+                            ("plugin", plugin) => {
+                                let _ = self
+                                    .execute_plugin(plugin, &Table::new(), &mut context)
+                                    .await;
+                            }
+                            _ => panic!("Invalid dependency: {}", task),
+                        },
+                        Dependency::Status(dep) => {
+                            match parse_dependency(dep.keys().next().unwrap()) {
+                                ("task", task) => {
+                                    Box::pin(self.run(task)).await;
+                                }
+                                ("template", template) => {
+                                    let _ = self.execute_template(
+                                        task_name,
+                                        template,
+                                        &Table::new(),
+                                        &mut context,
+                                    );
+                                }
+                                ("plugin", plugin) => {
+                                    let _ = self
+                                        .execute_plugin(
+                                            plugin,
+                                            dep.values()
+                                                .next()
+                                                .unwrap_or(&Value::Table(Table::new()))
+                                                .as_table()
+                                                .unwrap(),
+                                            &mut context,
+                                        )
+                                        .await;
+                                }
+                                _ => panic!("Invalid dependency: {}", dep.keys().next().unwrap()),
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if let Some(runner_task) = self.tasks.get(task_name) {
             *runner_task.success.lock().expect("Failed to lock mutex") = Some(success);
         }
+
+        if let Some(on_finish) = task.get_on_finish() {
+            for finish in on_finish.iter() {
+                match finish {
+                    Dependency::Simple(task) => match parse_dependency(task) {
+                        ("task", task) => {
+                            Box::pin(self.run(task)).await;
+                        }
+                        ("template", template) => {
+                            let _ = self.execute_template(
+                                task_name,
+                                template,
+                                &Table::new(),
+                                &mut context,
+                            );
+                        }
+                        ("plugin", plugin) => {
+                            let _ = self
+                                .execute_plugin(plugin, &Table::new(), &mut context)
+                                .await;
+                        }
+                        _ => panic!("Invalid dependency: {}", task),
+                    },
+                    Dependency::Status(dep) => match parse_dependency(dep.keys().next().unwrap()) {
+                        ("task", task) => {
+                            Box::pin(self.run(task)).await;
+                        }
+                        ("template", template) => {
+                            let _ = self.execute_template(
+                                task_name,
+                                template,
+                                &Table::new(),
+                                &mut context,
+                            );
+                        }
+                        ("plugin", plugin) => {
+                            let _ = self
+                                .execute_plugin(
+                                    plugin,
+                                    dep.values()
+                                        .next()
+                                        .unwrap_or(&Value::Table(Table::new()))
+                                        .as_table()
+                                        .unwrap(),
+                                    &mut context,
+                                )
+                                .await;
+                        }
+                        _ => panic!("Invalid dependency: {}", dep.keys().next().unwrap()),
+                    },
+                }
+            }
+        }
     }
 
-    async fn execute_template(&self, task_name: &str, context: &mut Context) -> bool {
-        let task = self.workflow.get_task(task_name).unwrap();
+    async fn execute_template(
+        &self,
+        task_name: &str,
+        template_name: &str,
+        environment: &Table,
+        context: &mut Context,
+    ) -> bool {
         let template = self
             .workflow
-            .get_template(task.template.clone().unwrap().as_str())
+            .get_template(template_name)
             .expect("Template not found");
 
         let mut env: Vec<(String, String)> = vec![];
-
-        if let Some(task_env) = task.get_env() {
-            for (key, value) in task_env.iter() {
-                let resolved_value = context.resolve(value.as_str().unwrap());
-                env.push((key.clone(), resolved_value));
-            }
+        for (key, value) in environment.iter() {
+            let resolved_value = context.resolve(value.as_str().unwrap());
+            env.push((key.clone(), resolved_value));
         }
         if let Some(template_env) = template.get_env() {
             for (key, value) in template_env.iter() {
@@ -329,11 +518,11 @@ impl Runner {
             })
             .unwrap_or(false);
 
-        if let Some(retry) = task.retry {
+        if let Some(retry) = template.retry {
             let mut retries = 0;
             while !success && retries < retry {
                 retries += 1;
-                if let Some(delay) = task.retry_delay {
+                if let Some(delay) = template.retry_delay {
                     tokio::time::sleep(std::time::Duration::from_secs(delay as u64)).await;
                 }
 
@@ -351,20 +540,25 @@ impl Runner {
         success
     }
 
-    async fn execute_command(&self, task_name: &str, context: &mut Context) -> bool {
-        let task = self.workflow.get_task(task_name).unwrap();
+    async fn execute_command(
+        &self,
+        task_name: &str,
+        command: &str,
+        environment: &Table,
+        retry: usize,
+        retry_delay: usize,
+        context: &mut Context,
+    ) -> bool {
         let mut env: Vec<(String, String)> = vec![];
 
-        if let Some(task_env) = task.get_env() {
-            for (key, value) in task_env.iter() {
-                let resolved_value = context.resolve(value.as_str().unwrap());
-                env.push((key.clone(), resolved_value));
-            }
+        for (key, value) in environment.iter() {
+            let resolved_value = context.resolve(value.as_str().unwrap());
+            env.push((key.clone(), resolved_value));
         }
 
         let output = tokio::process::Command::new("sh")
             .arg("-c")
-            .arg(task.command.as_ref().unwrap())
+            .arg(command)
             .envs(env.clone())
             .output()
             .await;
@@ -389,17 +583,17 @@ impl Runner {
             })
             .unwrap_or(false);
 
-        if let Some(retry) = task.retry {
+        if retry > 0 {
             let mut retries = 0;
             while !success && retries < retry {
                 retries += 1;
-                if let Some(delay) = task.retry_delay {
-                    tokio::time::sleep(std::time::Duration::from_secs(delay as u64)).await;
+                if retry_delay > 0 {
+                    tokio::time::sleep(std::time::Duration::from_secs(retry_delay as u64)).await;
                 }
 
                 let output = tokio::process::Command::new("sh")
                     .arg("-c")
-                    .arg(task.command.as_ref().unwrap())
+                    .arg(command)
                     .envs(env.clone())
                     .output()
                     .await;
@@ -411,15 +605,18 @@ impl Runner {
         success
     }
 
-    async fn execute_plugin(&self, task_name: &str, context: &mut Context) -> bool {
-        let task = self.workflow.get_task(task_name).unwrap();
+    async fn execute_plugin(
+        &self,
+        plugin_name: &str,
+        config: &Table,
+        context: &mut Context,
+    ) -> bool {
         let plugin = self
             .plugins
             .iter()
-            .find(|p| &p.name == task.plugin.clone().unwrap().as_str())
+            .find(|p| &p.name == plugin_name)
             .expect("Plugin not found");
 
-        let config = task.get_config().unwrap();
         let config_resolved = context.resolve(&serde_json::to_string(&config).unwrap());
 
         unsafe {
@@ -437,21 +634,52 @@ impl Runner {
         if let Some(on_start) = self.workflow.get_on_start() {
             for finish in on_start.iter() {
                 match finish {
-                    Dependency::Simple(task) => {
-                        if self.needs_run(task) {
-                            self.run(task).await;
+                    Dependency::Simple(task) => match parse_dependency(task) {
+                        ("task", task) => {
+                            Box::pin(self.run(task)).await;
                         }
-                    }
-                    Dependency::Status(dep) => {
-                        let task = dep.keys().next().unwrap();
-                        let required_status = dep.get(task).unwrap().as_str().unwrap();
-                        if self.needs_run(task) {
-                            self.run(task).await;
+                        ("template", template) => {
+                            let _ = self.execute_template(
+                                "on_start",
+                                template,
+                                &Table::new(),
+                                &mut Context::new(),
+                            );
                         }
-                        if !self.check_dependency_status(task, required_status) {
-                            panic!("On finish task did not satisfy state {}: {}, terminating workflow!", required_status, task);
+                        ("plugin", plugin) => {
+                            let _ = self
+                                .execute_plugin(plugin, &Table::new(), &mut Context::new())
+                                .await;
                         }
-                    }
+                        _ => panic!("Invalid dependency: {}", task),
+                    },
+                    Dependency::Status(dep) => match parse_dependency(dep.keys().next().unwrap()) {
+                        ("task", task) => {
+                            Box::pin(self.run(task)).await;
+                        }
+                        ("template", template) => {
+                            let _ = self.execute_template(
+                                "on_start",
+                                template,
+                                &Table::new(),
+                                &mut Context::new(),
+                            );
+                        }
+                        ("plugin", plugin) => {
+                            let _ = self
+                                .execute_plugin(
+                                    plugin,
+                                    dep.values()
+                                        .next()
+                                        .unwrap_or(&Value::Table(Table::new()))
+                                        .as_table()
+                                        .unwrap(),
+                                    &mut Context::new(),
+                                )
+                                .await;
+                        }
+                        _ => panic!("Invalid dependency: {}", dep.keys().next().unwrap()),
+                    },
                 }
             }
         }
@@ -475,21 +703,52 @@ impl Runner {
         if let Some(on_finish) = self.workflow.get_on_finish() {
             for finish in on_finish.iter() {
                 match finish {
-                    Dependency::Simple(task) => {
-                        if self.needs_run(task) {
-                            self.run(task).await;
+                    Dependency::Simple(task) => match parse_dependency(task) {
+                        ("task", task) => {
+                            Box::pin(self.run(task)).await;
                         }
-                    }
-                    Dependency::Status(dep) => {
-                        let task = dep.keys().next().unwrap();
-                        let required_status = dep.get(task).unwrap().as_str().unwrap();
-                        if self.needs_run(task) {
-                            self.run(task).await;
+                        ("template", template) => {
+                            let _ = self.execute_template(
+                                "on_finish",
+                                template,
+                                &Table::new(),
+                                &mut Context::new(),
+                            );
                         }
-                        if !self.check_dependency_status(task, required_status) {
-                            panic!("On finish task did not satisfy state {}: {}, terminating workflow!", required_status, task);
+                        ("plugin", plugin) => {
+                            let _ = self
+                                .execute_plugin(plugin, &Table::new(), &mut Context::new())
+                                .await;
                         }
-                    }
+                        _ => panic!("Invalid dependency: {}", task),
+                    },
+                    Dependency::Status(dep) => match parse_dependency(dep.keys().next().unwrap()) {
+                        ("task", task) => {
+                            Box::pin(self.run(task)).await;
+                        }
+                        ("template", template) => {
+                            let _ = self.execute_template(
+                                "on_finish",
+                                template,
+                                &Table::new(),
+                                &mut Context::new(),
+                            );
+                        }
+                        ("plugin", plugin) => {
+                            let _ = self
+                                .execute_plugin(
+                                    plugin,
+                                    dep.values()
+                                        .next()
+                                        .unwrap_or(&Value::Table(Table::new()))
+                                        .as_table()
+                                        .unwrap(),
+                                    &mut Context::new(),
+                                )
+                                .await;
+                        }
+                        _ => panic!("Invalid dependency: {}", dep.keys().next().unwrap()),
+                    },
                 }
             }
         }
@@ -516,5 +775,14 @@ impl Runner {
         } else {
             false
         }
+    }
+}
+
+fn parse_dependency(dep: &str) -> (&str, &str) {
+    let parts: Vec<&str> = dep.splitn(2, ':').collect();
+    if parts.len() == 2 {
+        (parts[0], parts[1])
+    } else {
+        ("task", dep)
     }
 }

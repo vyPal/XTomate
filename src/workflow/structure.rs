@@ -22,6 +22,9 @@ pub struct Task {
     pub retry_delay: Option<usize>,
     pub run: Option<bool>,
     pub plugin: Option<String>,
+    on_start: Option<Vec<Dependency>>,
+    on_finish: Option<Vec<Dependency>>,
+    on_error: Option<Vec<Dependency>>,
     config: Option<Table>,
     env: Option<Table>,
     dependencies: Option<Vec<Dependency>>,
@@ -85,6 +88,9 @@ impl WorkFlow {
                 retry_delay: None,
                 env: None,
                 dependencies,
+                on_start: None,
+                on_finish: None,
+                on_error: None,
             },
         );
     }
@@ -130,6 +136,18 @@ impl Task {
 
     pub fn get_env(&self) -> Option<&Table> {
         self.env.as_ref()
+    }
+
+    pub fn get_on_error(&self) -> Option<&Vec<Dependency>> {
+        self.on_error.as_ref()
+    }
+
+    pub fn get_on_finish(&self) -> Option<&Vec<Dependency>> {
+        self.on_finish.as_ref()
+    }
+
+    pub fn get_on_start(&self) -> Option<&Vec<Dependency>> {
+        self.on_start.as_ref()
     }
 }
 

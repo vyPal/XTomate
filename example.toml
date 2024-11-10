@@ -1,8 +1,8 @@
 name = "example"
-version = "0.1.0"
+version = "0.2.0"
 
-on_start = ["log_start"]
-on_finish = ["notify_send", "log_done", "clean"]
+on_start = [{"plugin:logger" = { message = "Workflow started", level = "info", sub_app_name = "Status" }}]
+on_finish = ["notify_send", {"plugin:logger" = { message = "Workflow finished", level = "info", sub_app_name = "Status" }}, "clean"]
 
 [[plugins]]
 name = "notify_send"
@@ -23,16 +23,6 @@ command = "echo \"{{MESSAGE}}\" {{PIPE}}"
 run = false
 plugin = "notify_send"
 config = { message = "Workflow finished" }
-
-[tasks.log_done]
-run = false
-plugin = "logger"
-config = { message = "Workflow finished", level = "info", sub_app_name = "Status" }
-
-[tasks.log_start]
-run = false
-plugin = "logger"
-config = { message = "Workflow started", level = "info", sub_app_name = "Status" }
 
 [tasks.clean]
 run = false
