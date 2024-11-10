@@ -29,6 +29,10 @@ run = false
 command = "rm -rf testdir"
 dependencies = [{"prepdir" = "success"}]
 
+[tasks.willfail]
+command = "exit 1"
+on_error = [{"plugin:logger" = { message = "Task failed", level = "error", sub_app_name = "Tasks" }}]
+
 [tasks.prepdir]
 command = """
 mkdir testdir
