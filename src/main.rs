@@ -49,7 +49,10 @@ fn write_workflow(workflow: &WorkFlow, file_path: &str) -> Result<(), Box<dyn st
     Ok(())
 }
 
-fn read_workflow(file_path: &str) -> Result<WorkFlow, Box<dyn std::error::Error>> {
+fn read_workflow(file_path: &mut String) -> Result<WorkFlow, Box<dyn std::error::Error>> {
+    if !file_path.ends_with(".toml") {
+        file_path.push_str(".toml");
+    }
     let file = std::fs::read_to_string(file_path)?;
     let workflow: WorkFlow = toml::from_str(&file)?;
     Ok(workflow)
@@ -86,7 +89,7 @@ async fn main() {
                 true,
             )
             .unwrap();
-            let workflow = read_workflow(&format!("{}.toml", name)).unwrap();
+            let workflow = read_workflow(&mut name.clone()).unwrap();
             let mut runner = Runner::new(workflow, plugin_manager);
             runner.load();
             Arc::new(runner).run_all().await;
