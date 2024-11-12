@@ -272,11 +272,13 @@ impl Runner {
                             let _ = self
                                 .execute_plugin(
                                     plugin,
-                                    dep.values()
-                                        .next()
-                                        .unwrap_or(&Value::Table(Table::new()))
-                                        .as_table()
-                                        .unwrap(),
+                                    &context.resolve_table(
+                                        dep.values()
+                                            .next()
+                                            .unwrap_or(&Value::Table(Table::new()))
+                                            .as_table()
+                                            .unwrap(),
+                                    ),
                                     &mut context,
                                 )
                                 .await;
@@ -364,11 +366,13 @@ impl Runner {
                                     let _ = self
                                         .execute_plugin(
                                             plugin,
-                                            dep.values()
-                                                .next()
-                                                .unwrap_or(&Value::Table(Table::new()))
-                                                .as_table()
-                                                .unwrap(),
+                                            &context.resolve_table(
+                                                dep.values()
+                                                    .next()
+                                                    .unwrap_or(&Value::Table(Table::new()))
+                                                    .as_table()
+                                                    .unwrap(),
+                                            ),
                                             &mut context,
                                         )
                                         .await;
@@ -423,11 +427,13 @@ impl Runner {
                             let _ = self
                                 .execute_plugin(
                                     plugin,
-                                    dep.values()
-                                        .next()
-                                        .unwrap_or(&Value::Table(Table::new()))
-                                        .as_table()
-                                        .unwrap(),
+                                    &context.resolve_table(
+                                        dep.values()
+                                            .next()
+                                            .unwrap_or(&Value::Table(Table::new()))
+                                            .as_table()
+                                            .unwrap(),
+                                    ),
                                     &mut context,
                                 )
                                 .await;
