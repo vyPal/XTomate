@@ -38,10 +38,10 @@ impl Config {
         let config_path = ProjectDirs::from("me", "vyPal", "XTomate")
             .unwrap()
             .config_dir()
-            .join("config.toml");
+            .to_path_buf();
         let toml_string = toml::to_string(self)?;
         let _ = std::fs::create_dir_all(config_path.clone());
-        let mut file = File::create(config_path)?;
+        let mut file = File::create(config_path.join("config.toml"))?;
         file.write_all(toml_string.as_bytes())?;
         Ok(())
     }

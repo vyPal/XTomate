@@ -181,7 +181,10 @@ mod tests {
             "echo World".to_string(),
             Some(vec![Dependency::Simple("task1".to_string())]),
         );
-        assert_eq!(workflow.get_task("task1").unwrap().command, Some("echo Hello".to_string()));
+        assert_eq!(
+            workflow.get_task("task1").unwrap().command,
+            Some("echo Hello".to_string())
+        );
         assert_eq!(
             workflow.get_task("task2").unwrap().dependencies,
             Some(vec![Dependency::Simple("task1".to_string())])
@@ -204,6 +207,9 @@ mod tests {
             on_finish: None,
             on_error: None,
         };
-        assert_eq!(task.get_dependencies(), Some(&vec![Dependency::Simple("task1".to_string())]));
+        assert_eq!(
+            task.get_dependencies(),
+            Some(&vec![Dependency::Simple("task1".to_string())])
+        );
     }
 }

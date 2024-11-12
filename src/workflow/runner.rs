@@ -852,7 +852,10 @@ mod tests {
     #[test]
     fn test_parse_dependency() {
         assert_eq!(parse_dependency("task1"), ("task", "task1"));
-        assert_eq!(parse_dependency("template:template1"), ("template", "template1"));
+        assert_eq!(
+            parse_dependency("template:template1"),
+            ("template", "template1")
+        );
         assert_eq!(parse_dependency("plugin:plugin1"), ("plugin", "plugin1"));
     }
 
@@ -959,7 +962,10 @@ mod tests {
         };
 
         runner.determine_order().unwrap();
-        assert_eq!(runner.order, vec![vec!["task1".to_string()], vec!["task2".to_string()]]);
+        assert_eq!(
+            runner.order,
+            vec![vec!["task1".to_string()], vec!["task2".to_string()]]
+        );
     }
 
     #[test]
@@ -991,6 +997,9 @@ mod tests {
         };
 
         let result = runner.determine_order();
-        assert_eq!(result, Err("Cycle detected in task dependencies".to_string()));
+        assert_eq!(
+            result,
+            Err("Cycle detected in task dependencies".to_string())
+        );
     }
 }

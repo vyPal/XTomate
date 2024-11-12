@@ -63,8 +63,14 @@ mod tests {
         let mut context = Context::new();
         context.set("key".to_string(), "value".to_string());
         let mut table = Table::new();
-        table.insert("key".to_string(), toml::Value::String("{{key}}".to_string()));
-        table.insert("key2".to_string(), toml::Value::String("{{key2}}".to_string()));
+        table.insert(
+            "key".to_string(),
+            toml::Value::String("{{key}}".to_string()),
+        );
+        table.insert(
+            "key2".to_string(),
+            toml::Value::String("{{key2}}".to_string()),
+        );
         let resolved = context.resolve_table(&table);
         assert_eq!(resolved.get("key").unwrap().as_str().unwrap(), "value");
         assert_eq!(resolved.get("key2").unwrap().as_str().unwrap(), "{{key2}}");
