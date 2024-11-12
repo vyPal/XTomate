@@ -842,3 +842,155 @@ fn parse_dependency(dep: &str) -> (&str, &str) {
         ("task", dep)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+
+    #[test]
+    fn test_parse_dependency() {
+        assert_eq!(parse_dependency("task1"), ("task", "task1"));
+        assert_eq!(parse_dependency("template:template1"), ("template", "template1"));
+        assert_eq!(parse_dependency("plugin:plugin1"), ("plugin", "plugin1"));
+    }
+
+    #[test]
+    fn test_needs_run() {
+        let runner = Runner {
+            workflow: WorkFlow::new("test".to_string(), "0.1.0".to_string(), None),
+            tasks: HashMap::new(),
+            order: vec![],
+            plugin_manager: plugins::manager::PluginManager::new(PathBuf::new()),
+            plugins: vec![],
+        };
+
+        assert_eq!(runner.needs_run("task1"), false);
+    }
+
+    #[test]
+    fn test_check_dependency_status() {
+        let runner = Runner {
+            workflow: WorkFlow::new("test".to_string(), "0.1.0".to_string(), None),
+            tasks: HashMap::new(),
+            order: vec![],
+            plugin_manager: plugins::manager::PluginManager::new(PathBuf::new()),
+            plugins: vec![],
+        };
+
+        assert_eq!(runner.check_dependency_status("task1", "success"), false);
+    }
+
+    #[tokio::test]
+    async fn test_execute_command() {
+        let runner = Runner {
+            workflow: WorkFlow::new("test".to_string(), "0.1.0".to_string(), None),
+            tasks: HashMap::new(),
+            order: vec![],
+            plugin_manager: plugins::manager::PluginManager::new(PathBuf::new()),
+            plugins: vec![],
+        };
+
+        let mut context = Context::new();
+        let mut cmd_output = String::new();
+        let mut error = String::new();
+
+        let success = runner
+            .execute_command(
+                "test",
+                "echo Hello",
+                &Table::new(),
+                0,
+                0,
+                &mut context,
+                &mut cmd_output,
+                &mut error,
+            )
+            .await;
+
+        assert_eq!(success, true);
+        assert_eq!(cmd_output, "Hello\n");
+        assert_eq!(error, "");
+    }
+
+    #[tokio::test]
+    async fn test_run() {
+        let runner = Runner {
+            workflow: WorkFlow::new("test".to_string(), "0.1.0".to_string(), None),
+            tasks: HashMap::new(),
+            order: vec![],
+            plugin_manager: plugins::manager::PluginManager::new(PathBuf::new()),
+            plugins: vec![],
+        };
+
+        runner.run("test").await;
+    }
+
+    #[tokio::test]
+    async fn test_run_all() {
+        let runner = Arc::new(Runner {
+            workflow: WorkFlow::new("test".to_string(), "0.1.0".to_string(), None),
+            tasks: HashMap::new(),
+            order: vec![],
+            plugin_manager: plugins::manager::PluginManager::new(PathBuf::new()),
+            plugins: vec![],
+        });
+
+        runner.run_all().await;
+    }
+
+    #[test]
+    fn test_determine_order() {
+        let mut workflow = WorkFlow::new("test".to_string(), "0.1.0".to_string(), None);
+        workflow.add_task("task1".to_string(), "echo Hello".to_string(), None);
+        workflow.add_task(
+            "task2".to_string(),
+            "echo World".to_string(),
+            Some(vec![Dependency::Simple("task1".to_string())]),
+        );
+
+        let mut runner = Runner {
+            workflow,
+            tasks: HashMap::new(),
+            order: vec![],
+            plugin_manager: plugins::manager::PluginManager::new(PathBuf::new()),
+            plugins: vec![],
+        };
+
+        runner.determine_order().unwrap();
+        assert_eq!(runner.order, vec![vec!["task1".to_string()], vec!["task2".to_string()]]);
+    }
+
+    #[test]
+    fn test_determine_order_cycle() {
+        let mut workflow = WorkFlow::new("test".to_string(), "0.1.0".to_string(), None);
+        workflow.add_task("task1".to_string(), "echo Hello".to_string(), None);
+        workflow.add_task(
+            "task2".to_string(),
+            "echo World".to_string(),
+            Some(vec![Dependency::Simple("task1".to_string())]),
+        );
+        workflow.add_task(
+            "task3".to_string(),
+            "echo World".to_string(),
+            Some(vec![Dependency::Simple("task2".to_string())]),
+        );
+        workflow.add_task(
+            "task1".to_string(),
+            "echo World".to_string(),
+            Some(vec![Dependency::Simple("task3".to_string())]),
+        );
+
+        let mut runner = Runner {
+            workflow,
+            tasks: HashMap::new(),
+            order: vec![],
+            plugin_manager: plugins::manager::PluginManager::new(PathBuf::new()),
+            plugins: vec![],
+        };
+
+        let result = runner.determine_order();
+        assert_eq!(result, Err("Cycle detected in task dependencies".to_string()));
+    }
+}

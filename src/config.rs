@@ -40,7 +40,7 @@ impl Config {
             .config_dir()
             .join("config.toml");
         let toml_string = toml::to_string(self)?;
-        std::fs::create_dir_all(config_path.clone())?;
+        let _ = std::fs::create_dir_all(config_path.clone());
         let mut file = File::create(config_path)?;
         file.write_all(toml_string.as_bytes())?;
         Ok(())
@@ -57,5 +57,67 @@ impl Config {
                 Ok(config)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default() {
+        let config = Config::default();
+        assert_eq!(
+            config.get_plugin_dir(),
+            ProjectDirs::from("me", "vyPal", "XTomate")
+                .unwrap()
+                .data_dir()
+                .to_str()
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_load() {
+        let config = Config::default();
+        config.save().unwrap();
+        let loaded_config = Config::load().unwrap();
+        assert_eq!(config.get_plugin_dir(), loaded_config.get_plugin_dir());
+    }
+
+    #[test]
+    fn test_load_or_default() {
+        let config = Config::load_or_default(false).unwrap();
+        assert_eq!(
+            config.get_plugin_dir(),
+            ProjectDirs::from("me", "vyPal", "XTomate")
+                .unwrap()
+                .data_dir()
+                .to_str()
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_save() {
+        let config = Config::default();
+        config.save().unwrap();
+        let loaded_config = Config::load().unwrap();
+        assert_eq!(config.get_plugin_dir(), loaded_config.get_plugin_dir());
+    }
+
+    #[test]
+    fn test_save_load() {
+        let config = Config::default();
+        config.save().unwrap();
+        let loaded_config = Config::load().unwrap();
+        assert_eq!(config.get_plugin_dir(), loaded_config.get_plugin_dir());
+    }
+
+    #[test]
+    fn test_save_load_or_default() {
+        let config = Config::load_or_default(true).unwrap();
+        let loaded_config = Config::load().unwrap();
+        assert_eq!(config.get_plugin_dir(), loaded_config.get_plugin_dir());
     }
 }

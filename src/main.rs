@@ -99,3 +99,72 @@ async fn main() {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_write_workflow() {
+        let xtomate_version = env!("CARGO_PKG_VERSION");
+        let mut workflow = WorkFlow::new("test".to_string(), xtomate_version.to_string(), None);
+        workflow.add_task("task1".to_string(), "echo Hello".to_string(), None);
+        workflow.add_task(
+            "task2".to_string(),
+            "echo World".to_string(),
+            Some(vec![Dependency::Simple("task1".to_string())]),
+        );
+        write_workflow(&workflow, "test.toml").unwrap();
+        let read_workflow = read_workflow(&mut "test".to_string()).unwrap();
+        assert_eq!(workflow.name, read_workflow.name);
+        assert_eq!(workflow.version, read_workflow.version);
+        assert_eq!(workflow.description, read_workflow.description);
+    }
+
+    #[test]
+    fn test_read_workflow() {
+        let xtomate_version = env!("CARGO_PKG_VERSION");
+        let mut workflow = WorkFlow::new("test".to_string(), xtomate_version.to_string(), None);
+        workflow.add_task("task1".to_string(), "echo Hello".to_string(), None);
+        workflow.add_task(
+            "task2".to_string(),
+            "echo World".to_string(),
+            Some(vec![Dependency::Simple("task1".to_string())]),
+        );
+        write_workflow(&workflow, "test.toml").unwrap();
+        let read_workflow = read_workflow(&mut "test".to_string()).unwrap();
+        assert_eq!(workflow.name, read_workflow.name);
+        assert_eq!(workflow.version, read_workflow.version);
+        assert_eq!(workflow.description, read_workflow.description);
+    }
+
+    #[test]
+    fn test_read_workflow_no_extension() {
+        let xtomate_version = env!("CARGO_PKG_VERSION");
+        let mut workflow = WorkFlow::new("test".to_string(), xtomate_version.to_string(), None);
+        workflow.add_task("task1".to_string(), "echo Hello".to_string(), None);
+        workflow.add_task(
+            "task2".to_string(),
+            "echo World".to_string(),
+            Some(vec![Dependency::Simple("task1".to_string())]),
+        );
+        write_workflow(&workflow, "test.toml").unwrap();
+        let read_workflow = read_workflow(&mut "test".to_string()).unwrap();
+        assert_eq!(workflow.name, read_workflow.name);
+        assert_eq!(workflow.version, read_workflow.version);
+        assert_eq!(workflow.description, read_workflow.description);
+    }
+
+    #[test]
+    fn test_read_workflow_no_file() {
+        let _ = std::fs::remove_file("test.toml");
+        let result = read_workflow(&mut "test".to_string());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_read_workflow_invalid_file() {
+        let result = read_workflow(&mut "Cargo.toml".to_string());
+        assert!(result.is_err());
+    }
+}

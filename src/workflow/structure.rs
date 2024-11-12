@@ -166,3 +166,44 @@ impl Plugin {
         self.config.as_ref()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_workflow() {
+        let xtomate_version = env!("CARGO_PKG_VERSION");
+        let mut workflow = WorkFlow::new("test".to_string(), xtomate_version.to_string(), None);
+        workflow.add_task("task1".to_string(), "echo Hello".to_string(), None);
+        workflow.add_task(
+            "task2".to_string(),
+            "echo World".to_string(),
+            Some(vec![Dependency::Simple("task1".to_string())]),
+        );
+        assert_eq!(workflow.get_task("task1").unwrap().command, Some("echo Hello".to_string()));
+        assert_eq!(
+            workflow.get_task("task2").unwrap().dependencies,
+            Some(vec![Dependency::Simple("task1".to_string())])
+        );
+    }
+
+    #[test]
+    fn test_task() {
+        let task = Task {
+            command: Some("echo Hello".to_string()),
+            plugin: None,
+            template: None,
+            config: None,
+            run: None,
+            retry: None,
+            retry_delay: None,
+            env: None,
+            dependencies: Some(vec![Dependency::Simple("task1".to_string())]),
+            on_start: None,
+            on_finish: None,
+            on_error: None,
+        };
+        assert_eq!(task.get_dependencies(), Some(&vec![Dependency::Simple("task1".to_string())]));
+    }
+}
