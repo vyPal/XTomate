@@ -234,6 +234,9 @@ impl Runner {
 
         let mut context = Context::new();
 
+        context.set("XTOMATE_WORKFLOW".to_string(), self.workflow.name.clone());
+        context.set("XTOMATE_TASK".to_string(), task_name.to_string());
+
         if let Some(on_start) = task.get_on_start() {
             for finish in on_start.iter() {
                 match finish {
@@ -247,6 +250,8 @@ impl Runner {
                                 template,
                                 &Table::new(),
                                 &mut context,
+                                &mut String::new(), // TODO: Optimize this
+                                &mut String::new(),
                             );
                         }
                         ("plugin", plugin) => {
@@ -266,6 +271,8 @@ impl Runner {
                                 template,
                                 &Table::new(),
                                 &mut context,
+                                &mut String::new(),
+                                &mut String::new(),
                             );
                         }
                         ("plugin", plugin) => {
@@ -289,6 +296,9 @@ impl Runner {
             }
         }
 
+        let mut output = "".to_string();
+        let mut error = "".to_string();
+
         if task.template.is_some() {
             if let Some(config) = task.get_config() {
                 for (key, value) in config.iter() {
@@ -301,6 +311,8 @@ impl Runner {
                     task.template.clone().unwrap().as_str(),
                     task.get_env().unwrap_or(&Table::new()),
                     &mut context,
+                    &mut output,
+                    &mut error,
                 )
                 .await;
         } else if task.command.is_some() {
@@ -312,6 +324,8 @@ impl Runner {
                     task.retry.unwrap_or(0),
                     task.retry_delay.unwrap_or(0),
                     &mut context,
+                    &mut output,
+                    &mut error,
                 )
                 .await;
         } else if task.plugin.is_some() {
@@ -328,6 +342,8 @@ impl Runner {
 
         if !success {
             if let Some(on_error) = task.get_on_error() {
+                context.set("XTOMATE_STDERR".to_string(), error.to_string());
+                context.set("XTOMATE_STDOUT".to_string(), output.to_string());
                 for finish in on_error.iter() {
                     match finish {
                         Dependency::Simple(task) => match parse_dependency(task) {
@@ -340,6 +356,8 @@ impl Runner {
                                     template,
                                     &Table::new(),
                                     &mut context,
+                                    &mut output,
+                                    &mut error,
                                 );
                             }
                             ("plugin", plugin) => {
@@ -360,6 +378,8 @@ impl Runner {
                                         template,
                                         &Table::new(),
                                         &mut context,
+                                        &mut output,
+                                        &mut error,
                                     );
                                 }
                                 ("plugin", plugin) => {
@@ -390,6 +410,8 @@ impl Runner {
         }
 
         if let Some(on_finish) = task.get_on_finish() {
+            context.set("XTOMATE_STDERR".to_string(), error.to_string());
+            context.set("XTOMATE_STDOUT".to_string(), output.to_string());
             for finish in on_finish.iter() {
                 match finish {
                     Dependency::Simple(task) => match parse_dependency(task) {
@@ -402,6 +424,8 @@ impl Runner {
                                 template,
                                 &Table::new(),
                                 &mut context,
+                                &mut output,
+                                &mut error,
                             );
                         }
                         ("plugin", plugin) => {
@@ -421,6 +445,8 @@ impl Runner {
                                 template,
                                 &Table::new(),
                                 &mut context,
+                                &mut output,
+                                &mut error,
                             );
                         }
                         ("plugin", plugin) => {
@@ -451,6 +477,8 @@ impl Runner {
         template_name: &str,
         environment: &Table,
         context: &mut Context,
+        cmd_output: &mut String,
+        error: &mut String,
     ) -> bool {
         let template = self
             .workflow
@@ -512,6 +540,7 @@ impl Runner {
                         task_name,
                         String::from_utf8_lossy(&o.stdout)
                     );
+                    cmd_output.push_str(&String::from_utf8_lossy(&o.stdout));
                 }
                 if !o.stderr.is_empty() {
                     eprintln!(
@@ -519,6 +548,7 @@ impl Runner {
                         task_name,
                         String::from_utf8_lossy(&o.stderr)
                     );
+                    error.push_str(&String::from_utf8_lossy(&o.stderr));
                 }
                 o.status.success()
             })
@@ -554,6 +584,8 @@ impl Runner {
         retry: usize,
         retry_delay: usize,
         context: &mut Context,
+        cmd_output: &mut String,
+        error: &mut String,
     ) -> bool {
         let mut env: Vec<(String, String)> = vec![];
 
@@ -577,6 +609,7 @@ impl Runner {
                         task_name,
                         String::from_utf8_lossy(&o.stdout)
                     );
+                    cmd_output.push_str(&String::from_utf8_lossy(&o.stdout));
                 }
                 if !o.stderr.is_empty() {
                     eprintln!(
@@ -584,6 +617,7 @@ impl Runner {
                         task_name,
                         String::from_utf8_lossy(&o.stderr)
                     );
+                    error.push_str(&String::from_utf8_lossy(&o.stderr));
                 }
                 o.status.success()
             })
@@ -637,6 +671,10 @@ impl Runner {
     }
 
     pub async fn run_all(self: Arc<Self>) {
+        let mut context = Context::new();
+
+        context.set("XTOMATE_WORKFLOW".to_string(), self.workflow.name.clone());
+
         if let Some(on_start) = self.workflow.get_on_start() {
             for finish in on_start.iter() {
                 match finish {
@@ -649,12 +687,14 @@ impl Runner {
                                 "on_start",
                                 template,
                                 &Table::new(),
-                                &mut Context::new(),
+                                &mut context,
+                                &mut String::new(),
+                                &mut String::new(),
                             );
                         }
                         ("plugin", plugin) => {
                             let _ = self
-                                .execute_plugin(plugin, &Table::new(), &mut Context::new())
+                                .execute_plugin(plugin, &Table::new(), &mut context)
                                 .await;
                         }
                         _ => panic!("Invalid dependency: {}", task),
@@ -668,19 +708,23 @@ impl Runner {
                                 "on_start",
                                 template,
                                 &Table::new(),
-                                &mut Context::new(),
+                                &mut context,
+                                &mut String::new(),
+                                &mut String::new(),
                             );
                         }
                         ("plugin", plugin) => {
                             let _ = self
                                 .execute_plugin(
                                     plugin,
-                                    dep.values()
-                                        .next()
-                                        .unwrap_or(&Value::Table(Table::new()))
-                                        .as_table()
-                                        .unwrap(),
-                                    &mut Context::new(),
+                                    &context.resolve_table(
+                                        dep.values()
+                                            .next()
+                                            .unwrap_or(&Value::Table(Table::new()))
+                                            .as_table()
+                                            .unwrap(),
+                                    ),
+                                    &mut context,
                                 )
                                 .await;
                         }
@@ -718,12 +762,14 @@ impl Runner {
                                 "on_finish",
                                 template,
                                 &Table::new(),
-                                &mut Context::new(),
+                                &mut context,
+                                &mut String::new(),
+                                &mut String::new(),
                             );
                         }
                         ("plugin", plugin) => {
                             let _ = self
-                                .execute_plugin(plugin, &Table::new(), &mut Context::new())
+                                .execute_plugin(plugin, &Table::new(), &mut context)
                                 .await;
                         }
                         _ => panic!("Invalid dependency: {}", task),
@@ -737,19 +783,23 @@ impl Runner {
                                 "on_finish",
                                 template,
                                 &Table::new(),
-                                &mut Context::new(),
+                                &mut context,
+                                &mut String::new(),
+                                &mut String::new(),
                             );
                         }
                         ("plugin", plugin) => {
                             let _ = self
                                 .execute_plugin(
                                     plugin,
-                                    dep.values()
-                                        .next()
-                                        .unwrap_or(&Value::Table(Table::new()))
-                                        .as_table()
-                                        .unwrap(),
-                                    &mut Context::new(),
+                                    &context.resolve_table(
+                                        dep.values()
+                                            .next()
+                                            .unwrap_or(&Value::Table(Table::new()))
+                                            .as_table()
+                                            .unwrap(),
+                                    ),
+                                    &mut context,
                                 )
                                 .await;
                         }

@@ -1,8 +1,8 @@
 name = "example"
 version = "0.2.0"
 
-on_start = [{"plugin:logger" = { message = "Workflow started", level = "info", sub_app_name = "Status" }}]
-on_finish = ["notify_send", {"plugin:logger" = { message = "Workflow finished", level = "info", sub_app_name = "Status" }}, "clean"]
+on_start = [{"plugin:logger" = { message = "Workflow '{{XTOMATE_WORKFLOW}}' started", level = "info", sub_app_name = "Status" }}]
+on_finish = ["notify_send", {"plugin:logger" = { message = "Workflow '{{XTOMATE_WORKFLOW}}' finished", level = "info", sub_app_name = "Status" }}, "clean"]
 
 [[plugins]]
 name = "notify_send"
@@ -22,7 +22,7 @@ command = "echo \"{{MESSAGE}}\" {{PIPE}}"
 [tasks.notify_send]
 run = false
 plugin = "notify_send"
-config = { message = "Workflow finished" }
+config = { message = "Workflow '{{XTOMATE_WORKFLOW}}' finished" }
 
 [tasks.clean]
 run = false
@@ -30,8 +30,8 @@ command = "rm -rf testdir"
 dependencies = [{"prepdir" = "success"}]
 
 [tasks.willfail]
-command = "exit 1"
-on_error = [{"plugin:logger" = { message = "Task failed", level = "error", sub_app_name = "Tasks" }}]
+command = "echo \"cs\" && exit 1"
+on_error = [{"plugin:logger" = { message = "Task '{{XTOMATE_TASK}}' failed: {{XTOMATE_STDOUT}}", level = "error", sub_app_name = "Tasks" }}]
 
 [tasks.prepdir]
 command = """
