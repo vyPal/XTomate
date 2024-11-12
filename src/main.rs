@@ -13,7 +13,7 @@ mod plugins;
 mod workflow;
 
 #[derive(Parser)]
-#[command(name = "XTomate", version, about)]
+#[command(name = "XTomate", version, about, arg_required_else_help = true)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
